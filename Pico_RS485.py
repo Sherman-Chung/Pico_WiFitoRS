@@ -18,6 +18,7 @@ def init(ch: int = 0, baudrate: int = 115200):
         raise ValueError("channel must be 0 or 1")
     cfg = UART_PINS[ch]
     uart = UART(ch, baudrate=baudrate, tx=cfg["tx"], rx=cfg["rx"])
+    # 快取 UART 實例，避免每次收發都重新初始化硬體
     _uart_cache[ch] = uart
     return uart
 
@@ -51,4 +52,3 @@ def flush_input(ch: int):
     uart = _get_uart(ch)
     while uart.any():
         uart.read()
-

@@ -58,6 +58,7 @@ def reboot_when_ab_held(show_ui: bool = True):
         t0 = time.ticks_ms()
         while pressed(keyA) and pressed(keyB):
             if time.ticks_diff(time.ticks_ms(), t0) >= 2000:
+                # 進入真正重啟前畫面提示，避免誤會程式當掉
                 if show_ui and LCD_AVAILABLE:
                     lcd.fill(BLACK)
                     lcd.text("Rebooting...", 60, 110, WHITE)
@@ -126,6 +127,7 @@ def run_system_checks(headless: bool):
         errors.append(msg)
 
     if errors:
+        # 嚴重錯誤直接鎖死，避免主迴圈持續運作卻沒有顯示或網路功能
         fail_halt(" | ".join(errors))
 
 
@@ -155,6 +157,7 @@ def main():
             print("mDNS start failed:", e)
 
     if AUTO_CONFIG_AP_ON_BOOT:
+        # 預設開啟設定用 AP 以便手機立即連線；timeout 交由 wait_for_station 控制
         ap_started = start_config_ap("PicoSetup", "pico1234")
         if ap_started:
             print("Config AP active: PicoSetup (pwd: pico1234)")
@@ -179,6 +182,7 @@ def main():
     if headless:
         print("LCD module not detected; UI disabled.")
         if not ap_started:
+            # 若未開 AP，進入 headless 模式時再補開一組，方便用 Web UI 配置
             ap_started = start_config_ap("PicoSetup", "pico1234")
             if ap_started:
                 print("Connect to AP PicoSetup (pwd: pico1234) then open http://192.168.4.1")

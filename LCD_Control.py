@@ -61,7 +61,7 @@ class LCD_1inch3(framebuf.FrameBuffer):
         self.rst = Pin(RST, Pin.OUT)
 
         self.cs(1)
-        # SPI 預設 100MHz；若不穩定可下調
+        # SPI 預設 100MHz；若不穩定可下調（介面共用 MOSI/SCK/CS）
         self.spi = SPI(1, 100000000, polarity=0, phase=0, sck=Pin(SCK), mosi=Pin(MOSI), miso=None)
         self.dc = Pin(DC, Pin.OUT)
         self.dc(1)
@@ -89,6 +89,7 @@ class LCD_1inch3(framebuf.FrameBuffer):
         self.rst(0)
         self.rst(1)
 
+        # 以下為 ST7789 初始化序列：主要設定色彩格式、伽瑪曲線等
         self.write_cmd(0x36)
         self.write_data(0x70)
 

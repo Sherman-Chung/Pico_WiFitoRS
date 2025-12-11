@@ -194,6 +194,7 @@ def poll_cmd_server():
             return
         cmd = data.decode("utf-8", "ignore")
         resp = handle_cmd(cmd) + "\n"
+        # 直接回應後關閉 socket，不維持長連線以節省資源
         cl.send(resp.encode("utf-8"))
     except OSError as e:
         print("poll_cmd_server recv/send error:", e)

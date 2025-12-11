@@ -168,6 +168,7 @@ def do_scan():
             ssid = (ap[0] or b"").decode("utf-8", "ignore").strip()
             rssi = ap[3]
             print(f"  SSID: {ssid}, RSSI: {rssi} dBm")
+        # 將掃描結果存起來，visible_list 後續可被關鍵字或排序調整
         scan_list = filtered
         visible_list = scan_list[:]
         sel = 0
@@ -308,6 +309,7 @@ def render_connect():
         x = GRID_START_X + col * CELL_W
         y = GRID_START_Y + row * CELL_H
         if idx == keypad_idx:
+            # 目前游標所在位置加上高亮底色
             lcd.fill_rect(x + 1, y + 1, CELL_W - 2, CELL_H - 2, HL)
         lcd.rect(x + 1, y + 1, CELL_W - 2, CELL_H - 2, PINK)
         tx = x + (CELL_W // 2 - 4 if len(label) == 1 else CELL_W // 2 - 8)
@@ -413,6 +415,7 @@ def attempt_connect(on_connected=None):
                 on_connected()
             except Exception as e:
                 print("server start error:", e)
+        # 連線成功後切到狀態畫面，並把上一頁資訊推入 stack 方便返回
         stack.append("connect")
         show_status()
         return True
@@ -442,6 +445,7 @@ def show_status():
     batt = read_battery(force=True)
     print("batt status:", batt, "err:", last_battery_error())
     if batt is not None:
+        # 若無 UPS 模組則 batt 會是 None，保留空白避免亂數顯示
         lcd.text(f"Batt V : {batt['v']:.2f}V", 6, y, BLACK); y += 18
         lcd.text(f"Batt I : {batt['i']:.3f}A", 6, y, BLACK); y += 18
         lcd.text(f"Batt % : {batt['p']:.0f}%", 6, y, BLACK); y += 18

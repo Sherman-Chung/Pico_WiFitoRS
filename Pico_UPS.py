@@ -143,6 +143,7 @@ def read_battery(force: bool = False):
     global _batt_cache, _batt_last_ms, _batt_err, _batt_printed, _available
     now = time.ticks_ms()
     if not force and _batt_cache is not None and time.ticks_diff(now, _batt_last_ms) < 300:
+        # 300ms 內重複讀取直接回快取，降低 I2C 開銷
         return _batt_cache
 
     ina = _init_ina219()
@@ -160,6 +161,7 @@ def read_battery(force: bool = False):
         _batt_last_ms = now
         _batt_err = None
         if not _batt_printed:
+            # 只在第一次成功時印出，避免刷屏
             print("INA219 read ok:", _batt_cache)
             _batt_printed = True
         return _batt_cache

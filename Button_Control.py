@@ -65,4 +65,3 @@ KEYS = {
     "RIGHT": keyRIGHT,
     "CTRL": keyCTRL,
 }
-

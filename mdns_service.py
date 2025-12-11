@@ -46,6 +46,7 @@ class MDNSResponder:
         try:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # 加入 mDNS multicast 群組，讓來自 224.0.0.251 的封包進入
             mreq = _inet_aton(MDNS_MCAST_GRP) + _inet_aton("0.0.0.0")
             self._sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
             self._sock.bind(("0.0.0.0", MDNS_PORT))

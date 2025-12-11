@@ -77,6 +77,7 @@ def connect_to_ap(ssid: str, psk: str, timeout_ms: int = CONNECT_TIMEOUT_MS) -> 
     """嘗試連線指定 AP，成功回 True，失敗回 False。"""
     _ensure_captive_dns()
     try:
+        # 先斷線避免舊連線資訊干擾，再重新激活 STA
         try:
             wlan.disconnect()
         except Exception:
