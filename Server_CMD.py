@@ -11,6 +11,33 @@ SERVER_PORT = 12345  # 可依需求調整
 server_sock = None
 
 
+def _crc16_modbus(data: bytes) -> int:
+    """Modbus RTU CRC16 (polynomial 0xA001), returns 0-0xFFFF."""
+    crc = 0xFFFF
+    for b in data:
+        crc ^= b
+        for _ in range(8):
+            if crc & 0x0001:
+                crc = (crc >> 1) ^ 0xA001
+            else:
+                crc >>= 1
+    return crc & 0xFFFF
+
+
+def _parse_hex_bytes(tokens) -> bytes:
+    """Parse list of hex string tokens into bytes (e.g., '06', '0x06')."""
+    out = bytearray()
+    for t in tokens:
+        if not t:
+            continue
+        if t.lower().startswith("0x"):
+            t = t[2:]
+        if not t:
+            continue
+        out.append(int(t, 16) & 0xFF)
+    return bytes(out)
+
+
 def handle_cmd(cmd: str) -> str:
     """核心指令解析：SYS / MB 兩大類，保留原本行為並加上中文註解。"""
     cmd = cmd.strip()
@@ -51,7 +78,7 @@ def handle_cmd(cmd: str) -> str:
             return "OK SYS PING"
 
         elif sub == "HELP":
-            return "OK SYS CMDS: \nSYS STATUS \nSYS WIFI \nSYS PING \nSYS HELP \nSYS MB R/W HR \nSYS COIL \nSYS LED ON/OFF"
+            return "OK SYS CMDS: \nSYS STATUS \nSYS WIFI \nSYS PING \nSYS HELP \nSYS MB R/W HR \nSYS COIL \nSYS LED ON/OFF \nRS SEND/RECV/HEX"
 
         else:
             return "ERR SYS UNKNOWN " + args[0]
@@ -131,6 +158,29 @@ def handle_cmd(cmd: str) -> str:
                 return f"OK RS SEND {ch} {n}B"
             except Exception as e:
                 return "ERR RS SEND " + str(e)[:60]
+
+        # RS HEX <ch> <hex bytes...>  (6 bytes, CRC auto appended)
+        elif sub == "HEX":
+            if len(args) < 3:
+                return "ERR RS HEX ARG"
+            try:
+                ch = int(args[1])
+            except ValueError:
+                return "ERR RS CH"
+            try:
+                raw = _parse_hex_bytes(args[2:])
+            except ValueError:
+                return "ERR RS HEX PARSE"
+            if len(raw) != 6:
+                return "ERR RS HEX LEN"
+            crc = _crc16_modbus(raw)
+            payload = raw + bytes([crc & 0xFF, (crc >> 8) & 0xFF])
+            try:
+                rs485.init(ch, baudrate=9600)
+                n = rs485.send(ch, payload)
+                return f"OK RS HEX {ch} {n}B"
+            except Exception as e:
+                return "ERR RS HEX " + str(e)[:60]
 
         # RS RECV <ch> [max]
         elif sub == "RECV":

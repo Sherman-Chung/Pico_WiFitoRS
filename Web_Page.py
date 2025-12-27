@@ -192,6 +192,16 @@ WEB_PAGE = """<!DOCTYPE html>
   </div>
 
   <div class="card">
+    <h2>RS485 HEX (固定 CH0)</h2>
+    <div class="small">輸入 6 bytes hex，Master 會自動補 CRC (Modbus RTU)</div>
+    <input id="hex-input" type="text" placeholder="例如：06 05 00 01 55 00" />
+    <div class="btn-row">
+      <button onclick="sendHex()">送出 HEX</button>
+    </div>
+    <div id="hex-info" class="small"></div>
+  </div>
+
+  <div class="card">
     <h2>回應 Log</h2>
     <div id="log"></div>
   </div>
@@ -231,6 +241,60 @@ WEB_PAGE = """<!DOCTYPE html>
 
   function clearLog() {
     document.getElementById('log').textContent = '';
+  }
+
+  function hexToBytes(raw) {
+    var parts = raw.trim().split(/\s+/).filter(Boolean);
+    var bytes = [];
+    for (var i = 0; i < parts.length; i++) {
+      var t = parts[i].toLowerCase();
+      if (t.startsWith('0x')) t = t.slice(2);
+      if (!t) continue;
+      if (!/^[0-9a-f]{1,2}$/.test(t)) return null;
+      bytes.push(parseInt(t, 16) & 0xFF);
+    }
+    return bytes;
+  }
+
+  function crc16Modbus(bytes) {
+    var crc = 0xFFFF;
+    for (var i = 0; i < bytes.length; i++) {
+      crc ^= bytes[i];
+      for (var j = 0; j < 8; j++) {
+        if (crc & 0x0001) {
+          crc = (crc >> 1) ^ 0xA001;
+        } else {
+          crc = crc >> 1;
+        }
+      }
+    }
+    return crc & 0xFFFF;
+  }
+
+  function formatHexByte(b) {
+    return ('0' + b.toString(16).toUpperCase()).slice(-2);
+  }
+
+  function sendHex() {
+    var inp = document.getElementById('hex-input');
+    var raw = (inp.value || '').trim();
+    if (!raw) return;
+    var info = document.getElementById('hex-info');
+    var bytes = hexToBytes(raw);
+    if (!bytes) {
+      info.textContent = '格式錯誤：請輸入 6 個 hex bytes（例如 06 05 00 01 55 00）';
+      return;
+    }
+    if (bytes.length !== 6) {
+      info.textContent = '長度錯誤：目前 ' + bytes.length + ' bytes，需 6 bytes';
+      return;
+    }
+    var crc = crc16Modbus(bytes);
+    var crcLo = crc & 0xFF;
+    var crcHi = (crc >> 8) & 0xFF;
+    info.textContent = 'CRC = ' + formatHexByte(crcLo) + ' ' + formatHexByte(crcHi) + '（完整 8 bytes 將由 Master 補）';
+    var cmd = 'RS HEX 0 ' + raw;
+    sendCmd(cmd);
   }
 
   function mbReadHR() {

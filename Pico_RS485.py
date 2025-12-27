@@ -1,6 +1,6 @@
 # Pico_RS485.py - 簡易封裝 Pico-2CH-RS485 的 UART 介面
 # 兩組通道：CH0 使用 UART0 (GP0/GP1)，CH1 使用 UART1 (GP4/GP5)
-# 預設 115200-N-8-1；如需調整可呼叫 init(baudrate=...)
+# 預設 9600-N-8-1；如需調整可呼叫 init(baudrate=...)
 
 from machine import UART, Pin
 
@@ -12,7 +12,7 @@ UART_PINS = {
 _uart_cache = {}
 
 
-def init(ch: int = 0, baudrate: int = 115200):
+def init(ch: int = 0, baudrate: int = 9600):
     """初始化指定通道，重複呼叫會覆寫 baudrate。"""
     if ch not in UART_PINS:
         raise ValueError("channel must be 0 or 1")
