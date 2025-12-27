@@ -2,6 +2,8 @@
 # 兩組通道：CH0 使用 UART0 (GP0/GP1)，CH1 使用 UART1 (GP4/GP5)
 # 預設 9600-N-8-1；如需調整可呼叫 init(baudrate=...)
 
+from typing import Union
+
 from machine import UART, Pin
 
 UART_PINS = {
@@ -29,7 +31,7 @@ def _get_uart(ch: int):
     return init(ch)
 
 
-def send(ch: int, data: bytes | str):
+def send(ch: int, data: Union[bytes, str]):
     """送出資料（bytes 或 str）。回傳送出位元組數。"""
     uart = _get_uart(ch)
     if isinstance(data, str):
