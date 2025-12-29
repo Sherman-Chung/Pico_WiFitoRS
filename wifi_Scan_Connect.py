@@ -147,6 +147,33 @@ def stop_config_ap() -> None:
     _ap_enabled = False
 
 
+def restart_config_ap() -> bool:
+    """重新啟動內建 AP（使用上次設定）。"""
+    cfg = _ap_config or {"essid": "PicoSetup", "password": ""}
+    stop_config_ap()
+    time.sleep_ms(200)
+    return start_config_ap(cfg.get("essid", "PicoSetup"), cfg.get("password", ""))
+
+
+def reset_wifi() -> bool:
+    """重新初始化 Wi-Fi（STA/AP），避免驅動狀態異常。"""
+    global _ap_enabled
+    try:
+        try:
+            wlan.disconnect()
+        except Exception:
+            pass
+        wlan.active(False)
+        time.sleep_ms(200)
+        wlan.active(True)
+    except Exception:
+        return False
+    if _ap_enabled:
+        restart_config_ap()
+    _ensure_captive_dns()
+    return True
+
+
 def ap_station_count() -> int:
     """回傳目前連上的 STA 數量（AP mode）。"""
     global _last_stations

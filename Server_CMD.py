@@ -2,26 +2,14 @@
 # handle_cmd 專責解析指令；start/poll 管理非阻塞 TCP 伺服器。
 
 import socket
+import time
 from machine import Pin
 
-from wifi_Scan_Connect import wlan
+from wifi_Scan_Connect import wlan, reset_wifi, restart_config_ap
 import Pico_RS485 as rs485
 
 SERVER_PORT = 12345  # 可依需求調整
 server_sock = None
-
-
-def _crc16_modbus(data: bytes) -> int:
-    """Modbus RTU CRC16 (polynomial 0xA001), returns 0-0xFFFF."""
-    crc = 0xFFFF
-    for b in data:
-        crc ^= b
-        for _ in range(8):
-            if crc & 0x0001:
-                crc = (crc >> 1) ^ 0xA001
-            else:
-                crc >>= 1
-    return crc & 0xFFFF
 
 
 def _parse_hex_bytes(tokens) -> bytes:
@@ -62,6 +50,9 @@ def handle_cmd(cmd: str) -> str:
                 return "ERR SYS STATUS " + str(e)[:60]
 
         elif sub == "WIFI":
+            if len(args) >= 2 and args[1].upper() == "RESET":
+                ok = reset_wifi()
+                return "OK SYS WIFI RESET" if ok else "ERR SYS WIFI RESET"
             try:
                 active = wlan.active()
                 conn = wlan.isconnected()
@@ -78,7 +69,10 @@ def handle_cmd(cmd: str) -> str:
             return "OK SYS PING"
 
         elif sub == "HELP":
-            return "OK SYS CMDS: \nSYS STATUS \nSYS WIFI \nSYS PING \nSYS HELP \nSYS MB R/W HR \nSYS COIL \nSYS LED ON/OFF \nRS SEND/RECV/HEX"
+            return "OK SYS CMDS: \nSYS STATUS \nSYS WIFI [RESET] \nSYS AP RESET \nSYS PING \nSYS HELP \nSYS MB R/W HR \nSYS COIL \nSYS LED ON/OFF \nRS SEND/RECV/HEX"
+        elif sub == "AP" and len(args) >= 2 and args[1].upper() == "RESET":
+            ok = restart_config_ap()
+            return "OK SYS AP RESET" if ok else "ERR SYS AP RESET"
 
         else:
             return "ERR SYS UNKNOWN " + args[0]
@@ -159,7 +153,7 @@ def handle_cmd(cmd: str) -> str:
             except Exception as e:
                 return "ERR RS SEND " + str(e)[:60]
 
-        # RS HEX <ch> <hex bytes...>  (6 bytes, CRC auto appended)
+        # RS HEX <ch> <hex bytes...>  (8 bytes, send as-is)
         elif sub == "HEX":
             if len(args) < 3:
                 return "ERR RS HEX ARG"
@@ -171,14 +165,34 @@ def handle_cmd(cmd: str) -> str:
                 raw = _parse_hex_bytes(args[2:])
             except ValueError:
                 return "ERR RS HEX PARSE"
-            if len(raw) != 6:
+            if len(raw) != 8:
                 return "ERR RS HEX LEN"
-            crc = _crc16_modbus(raw)
-            payload = raw + bytes([crc & 0xFF, (crc >> 8) & 0xFF])
             try:
-                rs485.init(ch, baudrate=9600)
-                n = rs485.send(ch, payload)
-                return f"OK RS HEX {ch} {n}B"
+                baudrate = 9600
+                rs485.init(ch, baudrate=baudrate)
+                rs485.flush_input(ch)
+                n = rs485.send(ch, raw)
+                # 等待 UART 送完再切入接收（估算傳輸時間）
+                tx_time_ms = int((len(raw) * 11 * 1000) / baudrate) + 2
+                time.sleep_ms(tx_time_ms)
+                # 簡易等待回覆：有資料就累積，若一段時間沒新資料就結束
+                buf = bytearray()
+                start = time.ticks_ms()
+                last_rx = start
+                while time.ticks_diff(time.ticks_ms(), start) < 1200:
+                    chunk = rs485.recv(ch, 256, log=False)
+                    if chunk:
+                        buf.extend(chunk)
+                        last_rx = time.ticks_ms()
+                    else:
+                        if buf and time.ticks_diff(time.ticks_ms(), last_rx) > 100:
+                            break
+                        time.sleep_ms(10)
+                if buf:
+                    hex_txt = " ".join("%02X" % b for b in buf)
+                    print("RS485 CH%d RX:" % ch, hex_txt)
+                    return f"OK RS HEX {ch} {n}B RX {len(buf)}B {hex_txt}"
+                return f"OK RS HEX {ch} {n}B RX 0B"
             except Exception as e:
                 return "ERR RS HEX " + str(e)[:60]
 

@@ -2,7 +2,10 @@
 # 兩組通道：CH0 使用 UART0 (GP0/GP1)，CH1 使用 UART1 (GP4/GP5)
 # 預設 9600-N-8-1；如需調整可呼叫 init(baudrate=...)
 
-from typing import Union
+try:
+    from typing import Union
+except ImportError:  # MicroPython may not include typing
+    Union = object
 
 from machine import UART, Pin
 
@@ -31,22 +34,29 @@ def _get_uart(ch: int):
     return init(ch)
 
 
-def send(ch: int, data: Union[bytes, str]):
+def send(ch: int, data):
     """送出資料（bytes 或 str）。回傳送出位元組數。"""
     uart = _get_uart(ch)
     if isinstance(data, str):
         data = data.encode()
+    if data:
+        hex_txt = " ".join("%02X" % b for b in data)
+        print("RS485 CH%d TX:" % ch, hex_txt)
     return uart.write(data)
 
 
-def recv(ch: int, max_bytes: int = 256) -> bytes:
+def recv(ch: int, max_bytes: int = 256, log: bool = True):
     """非阻塞讀取通道資料，回傳 bytes（可能為空）。"""
     uart = _get_uart(ch)
     n = uart.any()
     if not n:
         return b""
     n = min(n, max_bytes)
-    return uart.read(n) or b""
+    data = uart.read(n) or b""
+    if data and log:
+        hex_txt = " ".join("%02X" % b for b in data)
+        print("RS485 CH%d RX:" % ch, hex_txt)
+    return data
 
 
 def flush_input(ch: int):

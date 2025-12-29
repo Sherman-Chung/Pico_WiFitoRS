@@ -193,7 +193,7 @@ WEB_PAGE = """<!DOCTYPE html>
 
   <div class="card">
     <h2>RS485 HEX (固定 CH0)</h2>
-    <div class="small">輸入 6 bytes hex，Master 會自動補 CRC (Modbus RTU)</div>
+    <div class="small">輸入 6 bytes hex，自動計算 CRC 並送出</div>
     <input id="hex-input" type="text" placeholder="例如：06 05 00 01 55 00" />
     <div class="btn-row">
       <button onclick="sendHex()">送出 HEX</button>
@@ -261,7 +261,7 @@ WEB_PAGE = """<!DOCTYPE html>
     for (var i = 0; i < bytes.length; i++) {
       crc ^= bytes[i];
       for (var j = 0; j < 8; j++) {
-        if (crc & 0x0001) {
+        if (crc & 1) {
           crc = (crc >> 1) ^ 0xA001;
         } else {
           crc = crc >> 1;
@@ -271,10 +271,6 @@ WEB_PAGE = """<!DOCTYPE html>
     return crc & 0xFFFF;
   }
 
-  function formatHexByte(b) {
-    return ('0' + b.toString(16).toUpperCase()).slice(-2);
-  }
-
   function sendHex() {
     var inp = document.getElementById('hex-input');
     var raw = (inp.value || '').trim();
@@ -282,18 +278,29 @@ WEB_PAGE = """<!DOCTYPE html>
     var info = document.getElementById('hex-info');
     var bytes = hexToBytes(raw);
     if (!bytes) {
-      info.textContent = '格式錯誤：請輸入 6 個 hex bytes（例如 06 05 00 01 55 00）';
+      info.textContent = '格式錯誤：請輸入 6 或 8 個 hex bytes（例如 06 05 00 01 FF 00）';
       return;
     }
-    if (bytes.length !== 6) {
-      info.textContent = '長度錯誤：目前 ' + bytes.length + ' bytes，需 6 bytes';
+    if (bytes.length !== 6 && bytes.length !== 8) {
+      info.textContent = '長度錯誤：目前 ' + bytes.length + ' bytes，需 6 或 8 bytes';
       return;
     }
-    var crc = crc16Modbus(bytes);
-    var crcLo = crc & 0xFF;
-    var crcHi = (crc >> 8) & 0xFF;
-    info.textContent = 'CRC = ' + formatHexByte(crcLo) + ' ' + formatHexByte(crcHi) + '（完整 8 bytes 將由 Master 補）';
-    var cmd = 'RS HEX 0 ' + raw;
+    var full = bytes;
+    if (bytes.length === 6) {
+      var crc = crc16Modbus(bytes);
+      var crcLo = crc & 0xFF;
+      var crcHi = (crc >> 8) & 0xFF;
+      full = bytes.concat([crcLo, crcHi]);
+      info.textContent = 'CRC: ' + [crcLo, crcHi].map(function(b) {
+        return b.toString(16).padStart(2, '0').toUpperCase();
+      }).join(' ') + '，送出 8 bytes';
+    } else {
+      info.textContent = '送出 8 bytes（已含 CRC）';
+    }
+    var hexStr = full.map(function(b) {
+      return b.toString(16).padStart(2, '0').toUpperCase();
+    }).join(' ');
+    var cmd = 'RS HEX 0 ' + hexStr;
     sendCmd(cmd);
   }
 
