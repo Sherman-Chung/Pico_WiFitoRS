@@ -1,65 +1,70 @@
-# WiFi to Modbus RS485 Gateway
+# WiFi Modbus Gateway（專案新版）
 
 ## 1. 專案概覽
-- 以 Raspberry Pi Pico2 W 為核心
-- 結合 Pico-2CH-RS485 與 Pico-UPS-B
-- 提供 Wi‑Fi 控制與 RS485 Modbus RTU 通訊
+- Raspberry Pi Pico 2 W + Pico-2CH-RS485 + Pico-UPS-B
+- 2-Port Modbus RTU/ASCII → 1-Port Modbus TCP 閘道器
+- AP 模式點對點連線 + 可選 STA 模式連家用網路
 
 ## 2. 目標與價值
-- RS485 裝置無線化
-- 保留既有 Modbus RTU 架構
-- 行動裝置即可操作與維護
+- Modbus TCP 與 Modbus RTU/ASCII 互通
+- Wi‑Fi AP 模式可點對點接入
+- 設定永久保存、停電不遺失
 
 ## 3. 系統架構
-- Pico2 W：主控制 + Wi‑Fi
-- Pico-2CH-RS485：UART↔RS485
-- Pico-UPS-B：電壓/電流監測
+- Pico 2 W：主控 + Wi‑Fi AP/STA + Modbus TCP
+- Pico-2CH-RS485：UART0/1 ↔ RS485 CH0/CH1
+- Pico-UPS-B：電源/電量監測（INA219）
 
 ## 4. 硬體連接
 - UART0 (GP0/GP1) → RS485 CH0
+- UART1 (GP4/GP5) → RS485 CH1
 - I2C → UPS/INA219
-- AP/STA 模式共用 Wi‑Fi
+- Wi‑Fi AP/STA 共用
 
 ## 5. 韌體模組
-- `main.py`：狀態機與輪詢
-- `Web_Page.py`：Web UI
-- `Server_CMD.py`：指令解析
-- `Pico_RS485.py`：UART 封裝
+- `main.py`：狀態機 + 伺服器輪詢
+- `modbus_gateway.py`：Modbus TCP ↔ RTU/ASCII
+- `poller.py`：輪詢表格（循環）
+- `Web_Page.py`：Web UI（設定/輪詢/日誌）
+- `Server_CMD.py`：RS485 HEX 測試指令
+- `config_store.py`：設定永久保存
+- `Pico_RS485.py`：UART/RS485 封裝
 - `wifi_Scan_Connect.py`：Wi‑Fi 管理
 - `Pico_UPS.py`：電源監測
 
 ## 6. Web UI 功能
-- 快速指令（SYS/LED）
-- Wi‑Fi 掃描與連線
-- RS485 HEX 送出
-- Log 回應顯示
+- Gateway 設定：CH0/CH1 模式/baud/parity/stopbits/bits
+- AP 設定與 STA 連線（可保存）
+- RS485 HEX 測試（可選 CH0/CH1）
+- 輪詢表格：新增/刪除/儲存/啟動
+- Log 顯示 + System Reset（清空設定）
 
-## 7. Modbus RTU 支援
-- CRC-16 (0xA001, init 0xFFFF)
-- 6 bytes 自動補 CRC → 8 bytes
-- 回覆封包顯示於 Log
+## 7. Modbus RTU/ASCII 支援
+- RTU：CRC-16 (0xA001, init 0xFFFF)
+- ASCII：LRC 檢查
+- RS485 TX/RX 狀態顯示
 
-## 8. 通訊流程
-1) 連線 PicoSetup AP
-2) 開啟 Web UI
-3) 輸入 HEX
-4) 自動補 CRC 並送出
-5) 接收回覆
+## 8. 通訊流程（TCP↔RTU/ASCII）
+1) Client 連線 PicoSetup AP
+2) Modbus TCP 送出請求（port 502）
+3) 轉換 RTU/ASCII 並送至 CH0/CH1
+4) 收到回覆後回傳 TCP
 
 ## 9. 測試結果
-- Slave 可正確動作
-- 回覆封包成功接收
-- Web 操作可用
+- RS485 HEX 測試可正常 TX/RX
+- 輪詢表格可循環送出並顯示回覆
+- AP 模式可穩定連線與操作
 
 ## 10. 已知限制
-- DE/RE 自動切換，需等待窗口
-- 瀏覽器背景請求造成 log 雜訊
+- Pico 2 W 只支援 2.4GHz 802.11 b/g/n
+- RS485 同通道需序列化處理（半雙工）
 
 ## 11. 可擴充方向
-- 批次輪詢
-- 自動資料上雲
-- 多通道 RS485 支援
+- 依欄位自訂輪詢間隔
+- 解析回覆為數值/JSON
+- 連接雲端與告警機制
 
 ## 12. 結論
-- 成功建構 WiFi→Modbus RS485 Gateway
-- 保留既有工業裝置，提升遠端管理能力
+- 完成 2-Port RTU/ASCII ↔ Modbus TCP Wi‑Fi 閘道器
+- Web 設定與輪詢控制一體化
+- 保留既有工業設備，提升布線與維運彈性
