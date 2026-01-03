@@ -7,6 +7,7 @@ from machine import Pin
 
 from wifi_Scan_Connect import wlan, reset_wifi, restart_config_ap
 import Pico_RS485 as rs485
+from rs485_lock import acquire as lock_acquire, release as lock_release
 
 SERVER_PORT = 12345  # 可依需求調整
 server_sock = None
@@ -167,9 +168,22 @@ def handle_cmd(cmd: str) -> str:
                 return "ERR RS HEX PARSE"
             if len(raw) != 8:
                 return "ERR RS HEX LEN"
+            if not lock_acquire(ch):
+                return "ERR RS BUSY"
             try:
-                baudrate = 9600
-                rs485.init(ch, baudrate=baudrate)
+                from config_store import get_config
+
+                cfg = get_config()
+                modbus_cfg = cfg.get("modbus") or {}
+                ch_cfg = (modbus_cfg.get("ch0") if ch == 0 else modbus_cfg.get("ch1")) or {}
+                baudrate = int(ch_cfg.get("baudrate") or 9600)
+                rs485.init(
+                    ch,
+                    baudrate=baudrate,
+                    parity=ch_cfg.get("parity") or "N",
+                    stopbits=int(ch_cfg.get("stopbits") or 1),
+                    bits=int(ch_cfg.get("bits") or 8),
+                )
                 rs485.flush_input(ch)
                 n = rs485.send(ch, raw)
                 # 等待 UART 送完再切入接收（估算傳輸時間）
@@ -195,6 +209,8 @@ def handle_cmd(cmd: str) -> str:
                 return f"OK RS HEX {ch} {n}B RX 0B"
             except Exception as e:
                 return "ERR RS HEX " + str(e)[:60]
+            finally:
+                lock_release(ch)
 
         # RS RECV <ch> [max]
         elif sub == "RECV":

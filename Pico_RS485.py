@@ -17,12 +17,33 @@ UART_PINS = {
 _uart_cache = {}
 
 
-def init(ch: int = 0, baudrate: int = 9600):
-    """初始化指定通道，重複呼叫會覆寫 baudrate。"""
+def init(
+    ch: int = 0,
+    baudrate: int = 9600,
+    parity: str = "N",
+    stopbits: int = 1,
+    bits: int = 8,
+):
+    """初始化指定通道，重複呼叫會覆寫 UART 參數。"""
     if ch not in UART_PINS:
         raise ValueError("channel must be 0 or 1")
     cfg = UART_PINS[ch]
-    uart = UART(ch, baudrate=baudrate, tx=cfg["tx"], rx=cfg["rx"])
+    parity = (parity or "N").upper()
+    if parity == "E":
+        par = 0
+    elif parity == "O":
+        par = 1
+    else:
+        par = None
+    uart = UART(
+        ch,
+        baudrate=baudrate,
+        tx=cfg["tx"],
+        rx=cfg["rx"],
+        parity=par,
+        stop=stopbits,
+        bits=bits,
+    )
     # 快取 UART 實例，避免每次收發都重新初始化硬體
     _uart_cache[ch] = uart
     return uart

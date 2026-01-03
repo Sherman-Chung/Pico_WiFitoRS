@@ -36,15 +36,27 @@ except ImportError:
 import UI_Page as ui
 from Server_CMD import start_cmd_server, poll_cmd_server
 from Web_Page import start_http_server, poll_http_server
-from wifi_Scan_Connect import start_config_ap, wait_for_station, ap_station_count, wlan
+from wifi_Scan_Connect import (
+    start_config_ap,
+    wait_for_station,
+    ap_station_count,
+    wlan,
+    connect_to_ap,
+)
 from mdns_service import MDNSResponder
 from Pico_UPS import read_battery, last_battery_error
+from config_store import get_config
+from modbus_gateway import start_modbus_tcp_server, poll_modbus_tcp_server
+from poller import tick as poller_tick
 
 
 # =============== 網路服務啟動 ===============
 def start_network_services():
     """Wi-Fi 連上後開啟 TCP 與 HTTP 服務。"""
     try:
+        cfg = get_config()
+        mb_port = int((cfg.get("modbus") or {}).get("tcp_port") or 502)
+        start_modbus_tcp_server(mb_port)
         start_cmd_server()
         start_http_server()
     except Exception as e:
@@ -156,11 +168,16 @@ def main():
         except Exception as e:
             print("mDNS start failed:", e)
 
+    cfg = get_config()
+    ap_cfg = cfg.get("ap") or {}
+    ap_ssid = ap_cfg.get("ssid") or "PicoSetup"
+    ap_pwd = ap_cfg.get("password") or "pico1234"
+
     if AUTO_CONFIG_AP_ON_BOOT:
         # 預設開啟設定用 AP 以便手機立即連線；timeout 交由 wait_for_station 控制
-        ap_started = start_config_ap("PicoSetup", "pico1234")
+        ap_started = start_config_ap(ap_ssid, ap_pwd)
         if ap_started:
-            print("Config AP active: PicoSetup (pwd: pico1234)")
+            print("Config AP active:", ap_ssid)
             print("Open http://192.168.4.1 to configure Wi-Fi")
             print("Waiting for phone to connect to AP...")
             connected = wait_for_station(min_count=1, timeout_ms=None, poll_ms=500)
@@ -175,6 +192,16 @@ def main():
         services_started = True
         maybe_start_mdns()
 
+    sta_cfg = cfg.get("sta") or {}
+    sta_ssid = sta_cfg.get("ssid") or ""
+    sta_pwd = sta_cfg.get("password") or ""
+    if sta_ssid and not wlan.isconnected():
+        print("Trying saved STA:", sta_ssid)
+        try:
+            connect_to_ap(sta_ssid, sta_pwd)
+        except Exception as e:
+            print("STA connect failed:", e)
+
     headless = FORCE_HEADLESS or (not LCD_AVAILABLE) or getattr(lcd, "_is_dummy", False)
     # 進入主迴圈前先做一次模組檢查（失敗會停機閃燈）
     run_system_checks(headless)
@@ -183,9 +210,9 @@ def main():
         print("LCD module not detected; UI disabled.")
         if not ap_started:
             # 若未開 AP，進入 headless 模式時再補開一組，方便用 Web UI 配置
-            ap_started = start_config_ap("PicoSetup", "pico1234")
+            ap_started = start_config_ap(ap_ssid, ap_pwd)
             if ap_started:
-                print("Connect to AP PicoSetup (pwd: pico1234) then open http://192.168.4.1")
+                print("Connect to AP", ap_ssid, "then open http://192.168.4.1")
                 if not services_started:
                     print("Waiting for phone to connect to AP...")
                     wait_for_station(min_count=1, timeout_ms=None, poll_ms=500)
@@ -200,6 +227,8 @@ def main():
             reboot_when_ab_held(show_ui=False)
             poll_cmd_server()
             poll_http_server()
+            poll_modbus_tcp_server()
+            poller_tick()
             time.sleep_ms(200)
 
     # 開機先嘗試檢查 UPS/電量模組狀態並更新一次抬頭電量
@@ -217,6 +246,8 @@ def main():
         # 處理網路服務
         poll_cmd_server()
         poll_http_server()
+        poll_modbus_tcp_server()
+        poller_tick()
 
         if ui.mode == "home":
             if pressed(keyA) and debounce():
