@@ -155,6 +155,17 @@ def restart_config_ap() -> bool:
     return start_config_ap(cfg.get("essid", "PicoSetup"), cfg.get("password", ""))
 
 
+def apply_ap_config(essid: str, password: str, restart: bool = True) -> bool:
+    """更新 AP 設定並選擇是否立即重啟。"""
+    global _ap_config
+    _ap_config = {"essid": essid, "password": password}
+    if restart:
+        stop_config_ap()
+        time.sleep_ms(200)
+        return start_config_ap(essid, password)
+    return True
+
+
 def reset_wifi() -> bool:
     """重新初始化 Wi-Fi（STA/AP），避免驅動狀態異常。"""
     global _ap_enabled
