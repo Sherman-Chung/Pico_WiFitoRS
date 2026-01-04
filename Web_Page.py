@@ -300,11 +300,10 @@ WEB_PAGE = """<!DOCTYPE html>
       </div>
 
       <div class="btn-row">
-        <button onclick="saveConfig()">儲存設定</button>
-        <button class="ghost" onclick="loadConfig()">重新載入</button>
+        <button id="btn-save-config" type="button" onclick="saveConfig()">儲存設定</button>
+        <button type="button" class="ghost" onclick="loadConfig()">重新載入</button>
       </div>
       <div id="gw-status" class="note"></div>
-      <div id="cfg-msg" class="note"></div>
     </div>
 
     <div class="card">
@@ -542,6 +541,13 @@ WEB_PAGE = """<!DOCTYPE html>
     refreshScan();
     pollStatus();
     setInterval(pollStatus, 1000);
+    var btn = document.getElementById('btn-save-config');
+    if (btn) {
+      btn.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        saveConfig();
+      });
+    }
   };
 
   function loadConfig() {
@@ -732,6 +738,7 @@ WEB_PAGE = """<!DOCTYPE html>
           var lines = [];
           if (lc.tx) lines.push(prefix + ' TX ' + lc.tx);
           if (lc.rx) lines.push(prefix + ' RX ' + lc.rx);
+          if (!lc.rx && lc.rx_len === 0) lines.push(prefix + ' RX <empty>');
           if (lc.err) lines.push(prefix + ' ERR ' + lc.err);
           document.getElementById('poll-comm').textContent = lines.join('\\n');
         }
@@ -745,7 +752,6 @@ WEB_PAGE = """<!DOCTYPE html>
       modbus: {
         tcp_port: 502,
         response_timeout_ms: Number(document.getElementById('mb-timeout').value || 1200),
-        unit_map_ch0: document.getElementById('unit-map').value,
         ch0: {
           mode: document.getElementById('ch0-mode').value,
           baudrate: Number(document.getElementById('ch0-baud').value || 9600),
@@ -764,6 +770,7 @@ WEB_PAGE = """<!DOCTYPE html>
         ch1_enabled: document.getElementById('ch1-enabled').checked
       }
     };
+    document.getElementById('gw-status').textContent = '儲存中...';
     fetch('/cfg', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -771,12 +778,18 @@ WEB_PAGE = """<!DOCTYPE html>
     })
       .then(r => r.json())
       .then(d => {
-        document.getElementById('cfg-msg').textContent = d.ok ? '已儲存' : ('儲存失敗：' + (d.error || 'unknown'));
-        if (d.ok) document.getElementById('gw-status').textContent = '已儲存';
+        if (d.ok) {
+          var now = new Date();
+          var ts = now.toLocaleTimeString();
+          document.getElementById('gw-status').textContent = '已儲存 (' + ts + ')';
+          loadConfig();
+        } else {
+          document.getElementById('gw-status').textContent = '儲存失敗';
+        }
         updateChannelUi();
       })
       .catch(() => {
-        document.getElementById('cfg-msg').textContent = '儲存失敗';
+        document.getElementById('gw-status').textContent = '儲存失敗';
       });
   }
 
@@ -1061,6 +1074,8 @@ def poll_http_server():
             hdr = (
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Type: text/html; charset=UTF-8\r\n"
+                "Cache-Control: no-store, no-cache, must-revalidate\r\n"
+                "Pragma: no-cache\r\n"
                 f"Content-Length: {len(body_bytes)}\r\n"
                 "Connection: close\r\n"
                 "\r\n"

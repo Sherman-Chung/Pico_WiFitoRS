@@ -130,9 +130,20 @@ def run_system_checks(headless: bool):
 
     try:
         import Pico_RS485 as rs485
+        from config_store import get_config
 
-        rs485.init(0)
-        print("RS485 CH0 init ok")
+        cfg = get_config()
+        modbus_cfg = cfg.get("modbus") or {}
+        ch0_enabled = bool(modbus_cfg.get("ch0_enabled", False))
+        ch1_enabled = bool(modbus_cfg.get("ch1_enabled", False))
+        if not ch0_enabled and not ch1_enabled:
+            print("RS485 disabled (CH0/CH1 both off)")
+        if ch0_enabled:
+            rs485.init(0)
+            print("RS485 CH0 init ok")
+        if ch1_enabled:
+            rs485.init(1)
+            print("RS485 CH1 init ok")
     except Exception as e:
         msg = "RS485 init failed: " + str(e)
         print(msg)
@@ -179,13 +190,6 @@ def main():
         if ap_started:
             print("Config AP active:", ap_ssid)
             print("Open http://192.168.4.1 to configure Wi-Fi")
-            print("Waiting for phone to connect to AP...")
-            connected = wait_for_station(min_count=1, timeout_ms=None, poll_ms=500)
-            if connected:
-                print("Device connected to AP. Starting servers...")
-                print("Current STA count:", ap_station_count())
-            else:
-                print("No device connected; continuing without servers.")
         else:
             print("Config AP failed to start")
         start_network_services()
@@ -213,10 +217,6 @@ def main():
             ap_started = start_config_ap(ap_ssid, ap_pwd)
             if ap_started:
                 print("Connect to AP", ap_ssid, "then open http://192.168.4.1")
-                if not services_started:
-                    print("Waiting for phone to connect to AP...")
-                    wait_for_station(min_count=1, timeout_ms=None, poll_ms=500)
-                    print("Device connected to AP. Starting servers...")
             else:
                 print("Config AP failed to start")
         if not services_started:
