@@ -111,6 +111,16 @@ WEB_PAGE = """<!DOCTYPE html>
     font-size: 13px;
     box-sizing: border-box;
     background: #fbfbfd;
+    color: var(--ink);
+  }
+  select {
+    background: linear-gradient(180deg, #f7f8fb 0%, #eceff4 100%);
+    border-color: #cfd4db;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+  }
+  input:disabled, select:disabled, textarea:disabled {
+    color: #9aa1ad;
+    background: #f1f3f6;
   }
   textarea {
     min-height: 120px;
@@ -221,13 +231,13 @@ WEB_PAGE = """<!DOCTYPE html>
       <div class="row" style="margin-top:10px;">
         <div>
           <label>
-            <input type="checkbox" id="ch0-enabled" checked />
+            <input type="checkbox" id="ch0-enabled" class="gw-field" checked />
             啟用 CH0
           </label>
         </div>
         <div>
           <label>
-            <input type="checkbox" id="ch1-enabled" checked />
+            <input type="checkbox" id="ch1-enabled" class="gw-field" checked />
             啟用 CH1
           </label>
         </div>
@@ -238,25 +248,25 @@ WEB_PAGE = """<!DOCTYPE html>
         <div>
           <div class="pill">CH0</div>
           <label>模式</label>
-          <select id="ch0-mode">
+          <select id="ch0-mode" class="gw-field">
             <option value="rtu">RTU</option>
             <option value="ascii">ASCII</option>
           </select>
           <label>Baudrate</label>
-          <input id="ch0-baud" type="number" value="9600" />
+          <input id="ch0-baud" class="gw-field" type="number" value="9600" />
           <label>Parity</label>
-          <select id="ch0-parity">
+          <select id="ch0-parity" class="gw-field">
             <option value="N">None</option>
             <option value="E">Even</option>
             <option value="O">Odd</option>
           </select>
           <label>Stop Bits</label>
-          <select id="ch0-stop">
+          <select id="ch0-stop" class="gw-field">
             <option value="1">1</option>
             <option value="2">2</option>
           </select>
           <label>Data Bits</label>
-          <select id="ch0-bits">
+          <select id="ch0-bits" class="gw-field">
             <option value="8">8</option>
             <option value="7">7</option>
           </select>
@@ -264,25 +274,25 @@ WEB_PAGE = """<!DOCTYPE html>
         <div>
           <div class="pill">CH1</div>
           <label>模式</label>
-          <select id="ch1-mode">
+          <select id="ch1-mode" class="gw-field">
             <option value="rtu">RTU</option>
             <option value="ascii">ASCII</option>
           </select>
           <label>Baudrate</label>
-          <input id="ch1-baud" type="number" value="9600" />
+          <input id="ch1-baud" class="gw-field" type="number" value="9600" />
           <label>Parity</label>
-          <select id="ch1-parity">
+          <select id="ch1-parity" class="gw-field">
             <option value="N">None</option>
             <option value="E">Even</option>
             <option value="O">Odd</option>
           </select>
           <label>Stop Bits</label>
-          <select id="ch1-stop">
+          <select id="ch1-stop" class="gw-field">
             <option value="1">1</option>
             <option value="2">2</option>
           </select>
           <label>Data Bits</label>
-          <select id="ch1-bits">
+          <select id="ch1-bits" class="gw-field">
             <option value="8">8</option>
             <option value="7">7</option>
           </select>
@@ -293,6 +303,7 @@ WEB_PAGE = """<!DOCTYPE html>
         <button onclick="saveConfig()">儲存設定</button>
         <button class="ghost" onclick="loadConfig()">重新載入</button>
       </div>
+      <div id="gw-status" class="note"></div>
       <div id="cfg-msg" class="note"></div>
     </div>
 
@@ -539,6 +550,7 @@ WEB_PAGE = """<!DOCTYPE html>
       .then(d => {
         var mb = d.modbus || {};
         document.getElementById('mb-timeout').value = mb.response_timeout_ms || 1200;
+        document.getElementById('gw-status').textContent = '已儲存';
         document.getElementById('ch0-enabled').checked = mb.ch0_enabled !== false;
         document.getElementById('ch1-enabled').checked = mb.ch1_enabled !== false;
         var ch0 = mb.ch0 || {};
@@ -760,6 +772,7 @@ WEB_PAGE = """<!DOCTYPE html>
       .then(r => r.json())
       .then(d => {
         document.getElementById('cfg-msg').textContent = d.ok ? '已儲存' : ('儲存失敗：' + (d.error || 'unknown'));
+        if (d.ok) document.getElementById('gw-status').textContent = '已儲存';
         updateChannelUi();
       })
       .catch(() => {
@@ -806,6 +819,18 @@ WEB_PAGE = """<!DOCTYPE html>
   document.addEventListener('change', function(ev) {
     if (ev.target && (ev.target.id === 'ch0-enabled' || ev.target.id === 'ch1-enabled')) {
       updateChannelUi();
+    }
+  });
+
+  document.addEventListener('input', function(ev) {
+    if (ev.target && ev.target.classList && ev.target.classList.contains('gw-field')) {
+      document.getElementById('gw-status').textContent = '請儲存設定';
+    }
+  });
+
+  document.addEventListener('change', function(ev) {
+    if (ev.target && ev.target.classList && ev.target.classList.contains('gw-field')) {
+      document.getElementById('gw-status').textContent = '請儲存設定';
     }
   });
 
@@ -1127,6 +1152,9 @@ def poll_http_server():
             poller_cfg["enabled"] = True
             ok, err, _ = update_config({"poller": poller_cfg})
             if ok:
+                from poller import set_enabled as poller_set_enabled
+
+                poller_set_enabled(True)
                 send_json({"ok": True})
             else:
                 send_json({"ok": False, "error": err or "update failed"}, status="400 Bad Request")
@@ -1135,6 +1163,9 @@ def poll_http_server():
         if method == "POST" and path == "/poller/stop":
             ok, err, _ = update_config({"poller": {"enabled": False}})
             if ok:
+                from poller import set_enabled as poller_set_enabled
+
+                poller_set_enabled(False)
                 send_json({"ok": True})
             else:
                 send_json({"ok": False, "error": err or "update failed"}, status="400 Bad Request")

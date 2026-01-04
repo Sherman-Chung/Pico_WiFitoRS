@@ -11,6 +11,7 @@ _last_tick = 0
 _idx = 0
 _results = []
 _last_comm = {"ch": 0, "tx": "", "rx": "", "err": "", "ts": 0}
+_force_enabled = None
 
 
 def _crc16(data: bytes) -> int:
@@ -47,6 +48,19 @@ def _parse_rtu_frame(frame: bytes):
     if _crc16(body) != crc_rx:
         return None, None
     return body[0], body[1:]
+
+
+def _find_rtu_frame(raw: bytes):
+    n = len(raw)
+    if n < 5:
+        return None, None
+    # Try all windows to find a valid CRC frame.
+    for start in range(0, n - 4):
+        for end in range(start + 5, n + 1):
+            unit, pdu = _parse_rtu_frame(raw[start:end])
+            if unit is not None:
+                return unit, pdu
+    return None, None
 
 
 def _build_ascii_frame(unit_id: int, pdu: bytes) -> bytes:
@@ -153,6 +167,8 @@ def tick():
     cfg = get_config()
     poller = cfg.get("poller") or {}
     enabled = bool(poller.get("enabled"))
+    if _force_enabled is not None:
+        enabled = _force_enabled
     if _last_enabled is None:
         _last_enabled = enabled
     if enabled != _last_enabled:
@@ -241,9 +257,13 @@ def tick():
         _last_comm["rx"] = _format_hex_bytes(raw) if raw else ""
         _last_comm["err"] = ""
         _last_comm["ts"] = time.ticks_ms()
+        if raw:
+            print("RS485 CH%d RX:" % ch, _format_hex_bytes(raw))
 
         if resp_unit is None or resp_pdu is None:
-            _results[_idx - 1] = "TIMEOUT"
+            resp_unit, resp_pdu = _find_rtu_frame(raw)
+        if resp_unit is None or resp_pdu is None:
+            _results[_idx - 1] = "TIMEOUT" if raw == b"" else "BAD CRC"
             return
         if resp_unit != station:
             _results[_idx - 1] = "STA MISMATCH"
@@ -261,10 +281,18 @@ def status():
     cfg = get_config()
     poller_cfg = cfg.get("poller") or {}
     return {
-        "enabled": bool(poller_cfg.get("enabled")),
+        "enabled": bool(_force_enabled if _force_enabled is not None else poller_cfg.get("enabled")),
         "interval_ms": int(poller_cfg.get("interval_ms") or 1000),
         "index": _idx,
         "results": _results,
         "last_comm": _last_comm,
         "row_count": len(poller_cfg.get("rows") or []),
     }
+
+
+def set_enabled(enabled: bool) -> None:
+    global _force_enabled, _last_enabled, _last_tick, _idx
+    _force_enabled = bool(enabled)
+    _last_enabled = _force_enabled
+    _last_tick = 0
+    _idx = 0
