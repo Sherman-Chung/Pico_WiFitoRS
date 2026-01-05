@@ -211,19 +211,23 @@ WEB_PAGE = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<div class="wrap">
+  <div class="wrap">
+  <!-- 頁首與專案簡介 -->
   <h1>Pico Modbus Gateway</h1>
   <div class="sub">2-Ports Modbus RTU/ASCII → 1-Port Modbus TCP | AP 點對點連線</div>
 
   <div class="grid">
+    <!-- Gateway 參數設定 -->
     <div class="card">
       <h2>Gateway 設定</h2>
       <div class="row">
         <div>
+          <!-- Modbus TCP 監聽 Port，固定 502 -->
           <label>Modbus TCP Port (固定)</label>
           <input id="mb-port" type="number" value="502" disabled />
         </div>
         <div>
+          <!-- Gateway 回覆等待時間 -->
           <label>Response Timeout (ms)</label>
           <input id="mb-timeout" type="number" value="1200" min="100" />
         </div>
@@ -231,12 +235,14 @@ WEB_PAGE = """<!DOCTYPE html>
       <div class="row" style="margin-top:10px;">
         <div>
           <label>
+            <!-- 啟用/停用 CH0 -->
             <input type="checkbox" id="ch0-enabled" class="gw-field" checked />
             啟用 CH0
           </label>
         </div>
         <div>
           <label>
+            <!-- 啟用/停用 CH1 -->
             <input type="checkbox" id="ch1-enabled" class="gw-field" checked />
             啟用 CH1
           </label>
@@ -247,24 +253,29 @@ WEB_PAGE = """<!DOCTYPE html>
       <div class="row" style="margin-top:10px;">
         <div>
           <div class="pill">CH0</div>
+          <!-- CH0 通訊模式 RTU/ASCII -->
           <label>模式</label>
           <select id="ch0-mode" class="gw-field">
             <option value="rtu">RTU</option>
             <option value="ascii">ASCII</option>
           </select>
+          <!-- CH0 通訊速率 -->
           <label>Baudrate</label>
           <input id="ch0-baud" class="gw-field" type="number" value="9600" />
+          <!-- CH0 Parity -->
           <label>Parity</label>
           <select id="ch0-parity" class="gw-field">
             <option value="N">None</option>
             <option value="E">Even</option>
             <option value="O">Odd</option>
           </select>
+          <!-- CH0 Stop Bits -->
           <label>Stop Bits</label>
           <select id="ch0-stop" class="gw-field">
             <option value="1">1</option>
             <option value="2">2</option>
           </select>
+          <!-- CH0 Data Bits -->
           <label>Data Bits</label>
           <select id="ch0-bits" class="gw-field">
             <option value="8">8</option>
@@ -273,24 +284,29 @@ WEB_PAGE = """<!DOCTYPE html>
         </div>
         <div>
           <div class="pill">CH1</div>
+          <!-- CH1 通訊模式 RTU/ASCII -->
           <label>模式</label>
           <select id="ch1-mode" class="gw-field">
             <option value="rtu">RTU</option>
             <option value="ascii">ASCII</option>
           </select>
+          <!-- CH1 通訊速率 -->
           <label>Baudrate</label>
           <input id="ch1-baud" class="gw-field" type="number" value="9600" />
+          <!-- CH1 Parity -->
           <label>Parity</label>
           <select id="ch1-parity" class="gw-field">
             <option value="N">None</option>
             <option value="E">Even</option>
             <option value="O">Odd</option>
           </select>
+          <!-- CH1 Stop Bits -->
           <label>Stop Bits</label>
           <select id="ch1-stop" class="gw-field">
             <option value="1">1</option>
             <option value="2">2</option>
           </select>
+          <!-- CH1 Data Bits -->
           <label>Data Bits</label>
           <select id="ch1-bits" class="gw-field">
             <option value="8">8</option>
@@ -300,105 +316,139 @@ WEB_PAGE = """<!DOCTYPE html>
       </div>
 
       <div class="btn-row">
+        <!-- 儲存 Gateway 設定 -->
         <button id="btn-save-config" type="button" onclick="saveConfig()">儲存設定</button>
+        <!-- 重新從裝置載入設定 -->
         <button type="button" class="ghost" onclick="loadConfig()">重新載入</button>
       </div>
+      <!-- Gateway 設定提示 -->
       <div id="gw-status" class="note"></div>
     </div>
 
+    <!-- AP / STA Wi-Fi 設定 -->
     <div class="card">
       <h2>AP / Wi-Fi</h2>
       <div class="row">
         <div>
+          <!-- AP SSID -->
           <label>AP SSID</label>
           <input id="ap-ssid" type="text" />
         </div>
         <div>
+          <!-- AP 密碼 -->
           <label>AP 密碼（>=8字）</label>
           <input id="ap-pwd" type="text" />
         </div>
       </div>
       <div class="btn-row">
+        <!-- 更新 AP 設定 -->
         <button onclick="saveAp()">更新 AP 設定</button>
+        <!-- 立即刷新 Wi-Fi 狀態 -->
         <button class="secondary" onclick="refreshStatus()">更新狀態</button>
       </div>
+      <!-- STA/AP 狀態 -->
       <div id="wifi-status" class="note"></div>
 
       <div style="margin-top:12px;">
         <div class="note">Infrastructure 連線（選擇要連的路由器）</div>
         <div class="btn-row">
+          <!-- 掃描可用 AP -->
           <button class="secondary" onclick="refreshScan()">掃描可用 AP</button>
         </div>
+        <!-- 選擇可用 SSID -->
         <label>選擇可用 SSID</label>
         <select id="wifi-ssid">
           <option value="">(尚未掃描)</option>
         </select>
+        <!-- STA 密碼 -->
         <label>密碼（若為開放網路可留空）</label>
         <input type="text" id="wifi-psk" placeholder="Wi-Fi Password" />
         <label style="margin-top:6px;">
+          <!-- 是否保存 STA 設定 -->
           <input type="checkbox" id="wifi-save" checked />
           連線成功後保存 STA 設定
         </label>
         <div class="btn-row">
+          <!-- 執行 STA 連線 -->
           <button onclick="connectWifi()">連線</button>
         </div>
+        <!-- STA 連線結果 -->
         <div id="wifi-msg" class="note"></div>
       </div>
     </div>
 
+    <!-- 快速操作與自訂指令 -->
     <div class="card">
       <h2>快速操作</h2>
       <div class="btn-row">
+        <!-- 系統指令 -->
         <button onclick="sendCmd('SYS STATUS')">SYS STATUS</button>
         <button onclick="sendCmd('SYS WIFI')">SYS WIFI</button>
         <button onclick="sendCmd('LED ON')">LED ON</button>
         <button onclick="sendCmd('LED OFF')">LED OFF</button>
         <button class="secondary" onclick="sendCmd('SYS HELP')">SYS HELP</button>
       </div>
+      <!-- 自訂指令輸入 -->
       <label>自訂指令</label>
       <input id="cmd-input" type="text" placeholder="例如：SYS STATUS 或 MB R HR 1 0 3" />
       <div class="btn-row">
+        <!-- 送出指令 -->
         <button onclick="sendCmdFromInput()">送出</button>
+        <!-- 清除 log -->
         <button class="ghost" onclick="clearLog()">清除 Log</button>
       </div>
     </div>
 
+    <!-- RS485 HEX 測試工具 -->
     <div class="card">
       <h2>RS485 HEX</h2>
       <div class="note">使用 Gateway 設定的通訊參數</div>
+      <!-- 選擇 CH0/CH1 -->
       <label>通道</label>
       <select id="hex-ch">
         <option value="0">CH0</option>
         <option value="1">CH1</option>
       </select>
+      <!-- HEX bytes 輸入 -->
       <label style="margin-top:6px;">HEX bytes</label>
       <input id="hex-input" type="text" placeholder="例如：06 05 00 01 55 00" />
       <div class="btn-row">
+        <!-- 送出 HEX -->
         <button id="hex-send" onclick="sendHex()">送出 HEX</button>
       </div>
+      <!-- HEX 狀態訊息 -->
       <div id="hex-info" class="note"></div>
     </div>
 
+    <!-- 輪詢表格（循環送出） -->
     <div class="card span-2">
       <h2>輪詢表格</h2>
       <div class="row">
         <div>
+          <!-- 輪詢間隔 -->
           <label>輪詢間隔 (ms)</label>
           <input id="poll-interval" type="number" value="1000" min="50" />
         </div>
         <div class="btn-row" style="align-items:flex-end;">
+          <!-- 啟動輪詢 -->
           <button class="secondary" onclick="pollStart()">啟動</button>
+          <!-- 停止輪詢 -->
           <button class="ghost" onclick="pollStop()">停止</button>
+          <!-- 儲存輪詢表格 -->
           <button onclick="savePoller()">儲存表格</button>
         </div>
       </div>
+      <!-- 輪詢狀態 -->
       <div class="note" id="poll-status"></div>
+      <!-- CH0/CH1 啟用狀態 -->
       <div class="note" id="poll-ch-status"></div>
+      <!-- RS485 TX/RX 狀態 -->
       <div class="note mono" id="poll-comm"></div>
       <div style="overflow-x:auto;margin-top:8px;">
         <table>
           <thead>
             <tr>
+              <!-- 表格欄位說明 -->
               <th>CH</th>
               <th>Station</th>
               <th>Modbus CMD</th>
@@ -412,19 +462,23 @@ WEB_PAGE = """<!DOCTYPE html>
         </table>
       </div>
       <div class="btn-row">
+        <!-- 新增輪詢列 -->
         <button class="ghost" onclick="addRow()">+ 新增</button>
       </div>
     </div>
 
+    <!-- 系統回應 Log -->
     <div class="card span-2 log-card">
       <h2>回應 Log</h2>
       <div id="log" class="log"></div>
     </div>
 
+    <!-- System Reset -->
     <div class="card span-2">
       <h2>System Reset</h2>
       <div class="note">清空所有設定並重啟裝置。</div>
       <div class="btn-row">
+        <!-- 清空設定 + 重啟 -->
         <button class="danger" onclick="resetSystem()">System Reset</button>
       </div>
     </div>
