@@ -1,45 +1,18 @@
-# main.py — Pico 2 W + Pico-LCD-1.3 重構版
-# 將功能拆分成 LCD_Control / wifi_Scan_Connect / Server_CMD / Button_Control / Web_Page / UI_Page
-# 方便後續維護與擴充：每個模組皆附中文註解，主程式專注於狀態機與事件分派。
+# main.py — Pico 2 W Gateway（UPS + RS485）
+# 保留 AP/STA + Web + Modbus TCP + 輪詢表格，移除 LCD/按鍵 UI。
 
 import time
 import machine
 
 try:
-    from config import FORCE_HEADLESS, AUTO_CONFIG_AP_ON_BOOT
+    from config import AUTO_CONFIG_AP_ON_BOOT
 except ImportError:
-    FORCE_HEADLESS = False
     AUTO_CONFIG_AP_ON_BOOT = True
 
-from Button_Control import (
-    keyA,
-    keyB,
-    keyX,
-    keyY,
-    keyUP,
-    keyDN,
-    keyLEFT,
-    keyRIGHT,
-    keyCTRL,
-    pressed,
-    wait_release,
-    debounce,
-    key_hold,
-)
-
-# 若舊版 LCD_Control 無 LCD_AVAILABLE，改為 fallback 防止 ImportError
-try:
-    from LCD_Control import lcd, BLACK, WHITE, LCD_AVAILABLE
-except ImportError:
-    from LCD_Control import lcd, BLACK, WHITE
-    LCD_AVAILABLE = False
-import UI_Page as ui
 from Server_CMD import start_cmd_server, poll_cmd_server
 from Web_Page import start_http_server, poll_http_server
 from wifi_Scan_Connect import (
     start_config_ap,
-    wait_for_station,
-    ap_station_count,
     wlan,
     connect_to_ap,
 )
@@ -63,23 +36,6 @@ def start_network_services():
         print("server start error:", e)
 
 
-# =============== 重啟功能 ===============
-def reboot_when_ab_held(show_ui: bool = True):
-    """A+B 同時按住 2 秒觸發重啟。"""
-    if pressed(keyA) and pressed(keyB):
-        t0 = time.ticks_ms()
-        while pressed(keyA) and pressed(keyB):
-            if time.ticks_diff(time.ticks_ms(), t0) >= 2000:
-                # 進入真正重啟前畫面提示，避免誤會程式當掉
-                if show_ui and LCD_AVAILABLE:
-                    lcd.fill(BLACK)
-                    lcd.text("Rebooting...", 60, 110, WHITE)
-                    lcd.show()
-                time.sleep_ms(300)
-                machine.reset()
-            time.sleep_ms(20)
-
-
 # =============== 致命錯誤處理 ===============
 def fail_halt(reason: str):
     """檢查失敗時停機並閃 LED 提示。"""
@@ -98,18 +54,10 @@ def fail_halt(reason: str):
 
 
 # =============== 系統檢查（開機一次） ===============
-def run_system_checks(headless: bool):
-    """在進入主迴圈前檢查模組狀態（LCD/UPS/RS485），失敗則停機閃燈。"""
+def run_system_checks():
+    """在進入主迴圈前檢查模組狀態（UPS/RS485），失敗則停機閃燈。"""
     print("=== System checks ===")
     errors = []
-
-    if LCD_AVAILABLE and not getattr(lcd, "_is_dummy", False):
-        print("LCD detected: ready")
-    else:
-        msg = "LCD not detected (headless mode)"
-        print(msg)
-        if not headless:
-            errors.append(msg)
 
     try:
         batt = read_battery(force=True)
@@ -160,8 +108,7 @@ def main():
     ap_started = False
     mdns = None
     # main() 以 while 迴圈維持：1) 開啟 AP + Captive Portal 便於設定
-    # 2) 依是否有 LCD 進入 UI 或 headless 迴圈
-    # 3) 持續輪詢 TCP/HTTP 伺服器與按鍵事件
+    # 2) 持續輪詢 TCP/HTTP 伺服器與輪詢表格
 
     def maybe_start_mdns():
         nonlocal mdns
@@ -206,123 +153,28 @@ def main():
         except Exception as e:
             print("STA connect failed:", e)
 
-    headless = FORCE_HEADLESS or (not LCD_AVAILABLE) or getattr(lcd, "_is_dummy", False)
     # 進入主迴圈前先做一次模組檢查（失敗會停機閃燈）
-    run_system_checks(headless)
+    run_system_checks()
 
-    if headless:
-        print("LCD module not detected; UI disabled.")
-        if not ap_started:
-            # 若未開 AP，進入 headless 模式時再補開一組，方便用 Web UI 配置
-            ap_started = start_config_ap(ap_ssid, ap_pwd)
-            if ap_started:
-                print("Connect to AP", ap_ssid, "then open http://192.168.4.1")
-            else:
-                print("Config AP failed to start")
-        if not services_started:
-            start_network_services()
-            services_started = True
-            maybe_start_mdns()
-        while True:
-            reboot_when_ab_held(show_ui=False)
-            poll_cmd_server()
-            poll_http_server()
-            poll_modbus_tcp_server()
-            poller_tick()
-            time.sleep_ms(200)
+    if not ap_started:
+        # 若未開 AP，補開一組，方便用 Web UI 配置
+        ap_started = start_config_ap(ap_ssid, ap_pwd)
+        if ap_started:
+            print("Connect to AP", ap_ssid, "then open http://192.168.4.1")
+        else:
+            print("Config AP failed to start")
+    if not services_started:
+        start_network_services()
+        services_started = True
+        maybe_start_mdns()
 
-    # 開機先嘗試檢查 UPS/電量模組狀態並更新一次抬頭電量
-    ui.tick_battery(force=True)
-    ui.show_home()
-    ui.refresh_battery_gauge(force=True, commit=True)
-    maybe_start_mdns()
     while True:
-        # UI 模式：每輪更新電量 → 處理按鍵（依 mode 切換頁面）→ 輪詢網路服務
-        ui.tick_battery()
-        # 電量有變化時才 commit，減少閃爍
-        ui.refresh_battery_gauge(commit=True)
-        reboot_when_ab_held()
-
-        # 處理網路服務
+        # Headless 模式：輪詢網路服務與輪詢表格
         poll_cmd_server()
         poll_http_server()
         poll_modbus_tcp_server()
         poller_tick()
-
-        if ui.mode == "home":
-            if pressed(keyA) and debounce():
-                wait_release(keyA)
-                ui.do_scan()  # do_scan 內部會設定 mode 並切到列表頁
-            if pressed(keyB) and debounce():
-                wait_release(keyB)
-                ui.stack.append("home")
-                ui.show_status()
-
-        if ui.mode == "list":
-            if pressed(keyUP) and debounce():
-                wait_release(keyUP)
-                ui.move_selection(-1)
-            if pressed(keyDN) and debounce():
-                wait_release(keyDN)
-                ui.move_selection(+1)
-            if pressed(keyX) and debounce():
-                wait_release(keyX)
-                ui.show_home()
-            if pressed(keyB) and debounce():
-                wait_release(keyB)
-                ui.show_detail()
-            if pressed(keyY) and debounce():
-                wait_release(keyY)
-                ui.show_connect_setup()
-
-        if ui.mode == "detail":
-            if pressed(keyX) and debounce():
-                wait_release(keyX)
-                ui.render_list()
-
-        if ui.mode == "connect":
-            if pressed(keyX) and debounce():
-                wait_release(keyX)
-                ui.render_list()
-            if pressed(keyUP) and debounce():
-                wait_release(keyUP)
-                ui.keypad_move(0, -1)
-            if pressed(keyDN) and debounce():
-                wait_release(keyDN)
-                ui.keypad_move(0, +1)
-            if pressed(keyLEFT) and debounce():
-                wait_release(keyLEFT)
-                ui.keypad_move(-1, 0)
-            if pressed(keyRIGHT) and debounce():
-                wait_release(keyRIGHT)
-                ui.keypad_move(+1, 0)
-            if pressed(keyY) and debounce():
-                wait_release(keyY)
-                ui.keypad_press(start_network_services)
-            if pressed(keyCTRL) and key_hold():
-                wait_release(keyCTRL)
-                ui.attempt_connect(start_network_services)
-            if pressed(keyA) and debounce():
-                wait_release(keyA)
-                ui.delete_char()
-            if pressed(keyB) and debounce():
-                wait_release(keyB)
-                ui.clear_psk()
-
-        if ui.mode == "status":
-            if pressed(keyX) and debounce():
-                wait_release(keyX)
-                prev = ui.stack.pop() if ui.stack else "home"
-                if prev == "list":
-                    ui.render_list()
-                elif prev == "detail":
-                    ui.show_detail()
-                elif prev == "connect":
-                    ui.render_connect()
-                else:
-                    ui.show_home()
-
-        time.sleep_ms(15)
+        time.sleep_ms(200)
 
 
 # 進入點

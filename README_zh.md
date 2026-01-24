@@ -9,22 +9,22 @@
 ## 啟動流程
 1. `main.py` 啟動後依 `config.py` 決定是否自動開 AP (`AUTO_CONFIG_AP_ON_BOOT`)。  
 2. 開 AP 時同步啟動 Captive DNS（將任何網域導向 `192.168.4.1`），等待手機連上並啟動 TCP/HTTP 伺服器。  
-3. 若 LCD 存在，進入 UI 狀態機：顯示首頁 → 可掃描/選網路/輸入密碼連線。  
-4. 若無 LCD 或 `FORCE_HEADLESS=True`，維持 headless 迴圈，只跑網路服務。  
-5. 連上家用 Wi‑Fi 後可透過 mDNS（`pico.local`，若未被占用）或取得的 IP 連線。
-6. 若已保存 STA 設定，開機會自動嘗試連線。
+3. 連上家用 Wi‑Fi 後可透過 mDNS（`pico.local`，若未被占用）或取得的 IP 連線。  
+4. 若已保存 STA 設定，開機會自動嘗試連線。
 
-## 檔案導覽
-- `main.py`：主程式狀態機；負責啟動 AP/伺服器/mDNS，以及輪詢 TCP/HTTP/按鍵與 UI。  
+## 純 Web 版本
+- 本版本移除 LCD 與按鍵模組，所有設定與操作皆透過 Web UI 完成。  
+- Gateway/輪詢/RS485 HEX/STA 設定皆在 `http://192.168.4.1` 操作。  
+- 開機即啟動 AP 與服務，不需等待手機連線即可使用。  
+
+## 檔案導覽（純 Web 版）
+- `main.py`：純 Web 主程式；負責啟動 AP/伺服器/mDNS，以及輪詢 TCP/HTTP/Modbus/輪詢表格。  
 - `modbus_gateway.py`：Modbus TCP ↔ RTU/ASCII 轉換。  
 - `poller.py`：輪詢表格循環與回覆解析。  
 - `wifi_Scan_Connect.py`：Wi‑Fi 管理（STA/AP），掃描、連線、AP 啟停、Captive DNS。`_dns_target_ip` 會在 AP 有裝置時強制回 `192.168.4.1`，避免切到 STA IP 讓設定頁失聯。  
 - `Web_Page.py`：HTTP 伺服器 + 內建 Web UI。路徑：`/` 主頁、`/wifi/scan`、`/wifi/status`、`/wifi/connect`、`/cmd`、`/cfg`、`/poller/*`。  
 - `Server_CMD.py`：TCP 伺服器（port 12345）與指令解析；支援 SYS/LED/RS 指令。  
 - `config_store.py`：設定永久保存（AP/STA/Modbus/輪詢）。  
-- `UI_Page.py`：LCD UI 畫面與狀態，包含掃描列表、細節、連線鍵盤、狀態頁。  
-- `LCD_Control.py`：Pico-LCD-1.3 驅動與繪圖工具；若無 LCD 提供 `_DummyLCD` 防呆。  
-- `Button_Control.py`：按鍵腳位定義、去抖動、長按偵測。  
 - `Pico_RS485.py`：RS485 UART 初始化與收送封裝。  
 - `Pico_UPS.py`：INA219 讀電流/電壓，計算電量狀態，提供 UI 顯示文字。  
 - `dns_captive.py`：Captive DNS 伺服器，將所有 DNS 查詢導向指定 IP。  
@@ -60,6 +60,9 @@
 - 若 mDNS 出現 `EADDRINUSE`，代表 5353 已被占用，可忽略或換其它設備再試。  
 - 供電不足會讓 Wi‑Fi/RS485 不穩，請確保供電充足。  
 - 完成設定後如不需 AP，可呼叫 `stop_config_ap()` 或設 `AUTO_CONFIG_AP_ON_BOOT=False` 減少干擾。
+
+## 文件
+- 專案手冊：`Project_Manual_zh.md`（論文/報告用）
 
 ## 快速測試
 - LED：`echo 'LED ON' | nc 192.168.4.1 12345`（或改成 STA IP）。  
