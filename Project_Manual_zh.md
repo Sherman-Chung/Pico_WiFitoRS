@@ -6,6 +6,7 @@
 - **目標**：以 Raspberry Pi Pico 2 W 為核心，提供 2‑Port Modbus RTU/ASCII ↔ 1‑Port Modbus TCP 閘道器。  
 - **連線模式**：AP 點對點 + STA 連線既有網路，可保存設定。  
 - **純 Web 版本**：移除 LCD/按鍵，所有操作透過 Web UI 完成。  
+- **預設狀態**：CH0/CH1 預設關閉，需在 Gateway 設定中啟用。  
 
 ---
 
@@ -40,7 +41,7 @@
 
 ## 4. 開機流程（純 Web 版）
 1. 開機啟動 AP（預設 `PicoSetup / pico1234`）與 Captive DNS。  
-2. 同步啟動 HTTP/TCP/Modbus 服務。  
+2. 同步啟動 HTTP/TCP/Modbus 服務，不需等待手機連線。  
 3. 若已保存 STA，會自動嘗試連線。  
 4. Web UI 透過 `http://192.168.4.1` 或 STA IP 存取。  
 

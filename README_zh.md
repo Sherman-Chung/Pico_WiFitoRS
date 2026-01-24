@@ -8,7 +8,7 @@
 
 ## 啟動流程
 1. `main.py` 啟動後依 `config.py` 決定是否自動開 AP (`AUTO_CONFIG_AP_ON_BOOT`)。  
-2. 開 AP 時同步啟動 Captive DNS（將任何網域導向 `192.168.4.1`），等待手機連上並啟動 TCP/HTTP 伺服器。  
+2. 開 AP 時同步啟動 Captive DNS（將任何網域導向 `192.168.4.1`），立即啟動 TCP/HTTP 伺服器。  
 3. 連上家用 Wi‑Fi 後可透過 mDNS（`pico.local`，若未被占用）或取得的 IP 連線。  
 4. 若已保存 STA 設定，開機會自動嘗試連線。
 
@@ -16,6 +16,7 @@
 - 本版本移除 LCD 與按鍵模組，所有設定與操作皆透過 Web UI 完成。  
 - Gateway/輪詢/RS485 HEX/STA 設定皆在 `http://192.168.4.1` 操作。  
 - 開機即啟動 AP 與服務，不需等待手機連線即可使用。  
+- CH0/CH1 預設關閉，需在 Gateway 設定中啟用。  
 
 ## 檔案導覽（純 Web 版）
 - `main.py`：純 Web 主程式；負責啟動 AP/伺服器/mDNS，以及輪詢 TCP/HTTP/Modbus/輪詢表格。  
@@ -29,7 +30,7 @@
 - `Pico_UPS.py`：INA219 讀電流/電壓，計算電量狀態，提供 UI 顯示文字。  
 - `dns_captive.py`：Captive DNS 伺服器，將所有 DNS 查詢導向指定 IP。  
 - `mdns_service.py`：簡易 mDNS responder（只回 A 紀錄）。  
-- `config.py`：開機行為設定：`FORCE_HEADLESS`、`AUTO_CONFIG_AP_ON_BOOT`。  
+- `config.py`：開機行為設定：`AUTO_CONFIG_AP_ON_BOOT`。  
 - `tempCodeRunnerFile.py`：暫存/無用檔，可忽略。
 
 ## HTTP 介面
