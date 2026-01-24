@@ -980,6 +980,15 @@ WEB_PAGE = """<!DOCTYPE html>
         } else {
           msg.textContent = '連線失敗：' + (d.error || 'unknown');
         }
+        if (d.connected !== undefined) {
+          var txt = [];
+          txt.push('STA connected: ' + d.connected + (d.ip ? ' / IP ' + d.ip : ''));
+          if (d.rssi !== null && d.rssi !== undefined) txt.push('RSSI ' + d.rssi + ' dBm');
+          txt.push('AP active: ' + d.ap_active + (d.ap_essid ? ' (' + d.ap_essid + ')' : ''));
+          document.getElementById('wifi-status').textContent = txt.join(' | ');
+        } else {
+          refreshStatus();
+        }
         refreshStatus();
       })
       .catch(() => {
@@ -1195,14 +1204,25 @@ def poll_http_server():
                 ip = st.get("ifconfig", ("", ""))[0]
             except Exception:
                 ip = ""
+            status_payload = {
+                "connected": st.get("connected", False),
+                "ip": ip,
+                "rssi": st.get("rssi"),
+                "ap_active": st.get("ap_active", False),
+                "ap_essid": st.get("ap_essid", ""),
+            }
             if ok:
                 saved = False
                 if save_sta:
                     ok2, err2, _cfg = update_config({"sta": {"ssid": ssid, "password": psk}})
                     saved = ok2 and not err2
-                send_json({"ok": True, "ip": ip, "saved": saved})
+                resp = {"ok": True, "ip": ip, "saved": saved}
+                resp.update(status_payload)
+                send_json(resp)
             else:
-                send_json({"ok": False, "error": "connect failed"})
+                resp = {"ok": False, "error": "connect failed"}
+                resp.update(status_payload)
+                send_json(resp)
             return
 
         # ======= Poller API =======
