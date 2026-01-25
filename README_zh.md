@@ -5,6 +5,7 @@
 - STA 模式連上家用 Wi‑Fi 後，可保存設定，斷電不遺失。
 - 2‑Port Modbus RTU/ASCII ↔ 1‑Port Modbus TCP 閘道器（TCP 502）。
 - Web UI 可設定 CH0/CH1 參數、輪詢表格與 RS485 HEX 測試。
+- 可顯示供電來源（外部/電池/待機）與電量百分比。
 
 ## 啟動流程
 1. `main.py` 啟動後依 `config.py` 決定是否自動開 AP (`AUTO_CONFIG_AP_ON_BOOT`)。  
@@ -61,6 +62,7 @@
 - 若 mDNS 出現 `EADDRINUSE`，代表 5353 已被占用，可忽略或換其它設備再試。  
 - 供電不足會讓 Wi‑Fi/RS485 不穩，請確保供電充足。  
 - 完成設定後如不需 AP，可呼叫 `stop_config_ap()` 或設 `AUTO_CONFIG_AP_ON_BOOT=False` 減少干擾。
+- 供電來源顯示為推測結果，依 INA219 電流方向判斷。  
 
 ## 文件
 - 專案手冊：`Project_Manual_zh.md`（論文/報告用）
