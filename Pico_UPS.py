@@ -117,6 +117,7 @@ _batt_last_ms = 0
 _batt_err = None
 _batt_printed = False
 _available = True  # 檢測模組是否存在；初始化失敗則關閉電量顯示
+_CURRENT_THRESHOLD_A = 0.01  # 判斷供電來源的電流門檻（A）
 
 
 def _init_ina219():
@@ -190,3 +191,18 @@ def tick_battery(force: bool = False):
 def last_battery_error():
     """取得最近的讀取錯誤字串（若有）。"""
     return _batt_err
+
+
+def power_source_text():
+    """依電流方向推測供電來源（外部/電池/待機），僅供提示用。"""
+    batt = _batt_cache or read_battery()
+    if batt is None:
+        return "unknown"
+    current = batt.get("i", None)
+    if current is None:
+        return "unknown"
+    if abs(current) < _CURRENT_THRESHOLD_A:
+        return "idle"
+    if current > _CURRENT_THRESHOLD_A:
+        return "external"
+    return "battery"

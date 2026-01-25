@@ -36,7 +36,7 @@
 ## HTTP 介面
 - `GET /`：內建設定/控制頁。  
 - `GET /wifi/scan`：回傳可見 AP 列表 JSON。  
-- `GET /wifi/status`：回傳 STA/AP 狀態、RSSI、IP。  
+- `GET /wifi/status`：回傳 STA/AP 狀態、RSSI、IP、供電來源與電量。  
 - `POST /wifi/connect`：`{"ssid": "...", "psk": "...", "save": true}` 連線指定 AP，可選保存。  
 - `POST /cmd`：純文字指令，委派給 `Server_CMD.handle_cmd`。  
 - `GET /cfg` / `POST /cfg`：讀寫設定（AP/STA/Modbus/輪詢）。  

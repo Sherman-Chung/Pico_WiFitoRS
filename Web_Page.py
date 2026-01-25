@@ -13,6 +13,7 @@ from wifi_Scan_Connect import (
     apply_ap_config,
 )
 from config_store import get_config, update_config, reset_config
+from Pico_UPS import read_battery, power_source_text
 
 HTTP_PORT = 80
 http_sock = None
@@ -931,6 +932,14 @@ WEB_PAGE = """<!DOCTYPE html>
         txt.push('STA connected: ' + d.connected + (d.ip ? ' / IP ' + d.ip : ''));
         if (d.rssi !== null && d.rssi !== undefined) txt.push('RSSI ' + d.rssi + ' dBm');
         txt.push('AP active: ' + d.ap_active + (d.ap_essid ? ' (' + d.ap_essid + ')' : ''));
+        if (d.power) {
+          var pwr = d.power;
+          if (pwr === 'external') pwr = '外部供電';
+          if (pwr === 'battery') pwr = '電池供電';
+          if (pwr === 'idle') pwr = '待機';
+          if (pwr === 'unknown') pwr = '未知';
+          txt.push('Power: ' + pwr + (d.batt_p !== null && d.batt_p !== undefined ? (' / ' + d.batt_p + '%') : ''));
+        }
         document.getElementById('wifi-status').textContent = txt.join(' | ');
       })
       .catch(() => {
@@ -1167,6 +1176,14 @@ def poll_http_server():
                 ip = st.get("ifconfig", ("", ""))[0]
             except Exception:
                 ip = ""
+            batt = read_battery()
+            pwr = power_source_text()
+            batt_p = None
+            try:
+                if batt:
+                    batt_p = int(batt.get("p", 0))
+            except Exception:
+                batt_p = None
             send_json(
                 {
                     "connected": st.get("connected", False),
@@ -1174,6 +1191,8 @@ def poll_http_server():
                     "rssi": st.get("rssi"),
                     "ap_active": st.get("ap_active", False),
                     "ap_essid": st.get("ap_essid", ""),
+                    "power": pwr,
+                    "batt_p": batt_p,
                 }
             )
             return
