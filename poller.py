@@ -20,6 +20,7 @@ import time
 import Pico_RS485 as rs485
 from config_store import get_config
 from rs485_lock import acquire as lock_acquire, release as lock_release
+from register_store import set_reg, set_regs
 
 # 輪詢狀態
 _last_enabled = None  # 記錄上次 enabled 狀態，狀態切換時重置索引
@@ -184,6 +185,38 @@ def _parse_return(cmd: int, pdu: bytes):
     return _format_hex_bytes(pdu[1:])
 
 
+def _update_registers(cmd: int, pdu: bytes, row_index: int, row_data: int):
+    """將回覆資料寫入本地 0-255 registers（以表格列 index 為基準）。"""
+    if not pdu:
+        return
+    func = pdu[0]
+    # Exception 不更新
+    if func & 0x80:
+        return
+    base = row_index
+    if func in (0x03, 0x04):
+        if len(pdu) < 2:
+            return
+        count = pdu[1]
+        data = pdu[2 : 2 + count]
+        regs = []
+        for i in range(0, len(data), 2):
+            if i + 1 >= len(data):
+                break
+            regs.append((data[i] << 8) | data[i + 1])
+        set_regs(base, regs)
+        return
+    if func == 0x06 and len(pdu) >= 5:
+        val = (pdu[-2] << 8) | pdu[-1]
+        set_reg(base, val)
+        return
+    if func == 0x05 and len(pdu) >= 5:
+        val = (pdu[-2] << 8) | pdu[-1]
+        set_reg(base, val)
+        return
+    # 其他功能碼不更新
+
+
 def _ensure_results_size(n: int):
     """確保 Return 列數與輪詢表格列數一致。"""
     global _results
@@ -312,6 +345,7 @@ def tick():
         if resp_unit != station:
             _results[_idx - 1] = "STA MISMATCH"
             return
+        _update_registers(cmd, resp_pdu, _idx - 1, data)
         _results[_idx - 1] = _parse_return(cmd, resp_pdu)
     except Exception as e:
         _last_comm["ch"] = ch if "ch" in locals() else 0

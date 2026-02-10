@@ -16,6 +16,7 @@ def _default_config():
         "modbus": {
             "tcp_port": 502,
             "response_timeout_ms": 1200,
+            "tcp_slave_id": 1,
             "unit_map_ch0": "1-127",
             "unit_map_ch1": "",
             "ch0_enabled": False,
@@ -112,6 +113,12 @@ def _sanitize_modbus(modbus):
         out["response_timeout_ms"] = int(modbus.get("response_timeout_ms") or 1200)
     except Exception:
         return None, "response_timeout_ms invalid"
+    try:
+        out["tcp_slave_id"] = int(modbus.get("tcp_slave_id") or 1)
+    except Exception:
+        return None, "tcp_slave_id invalid"
+    if not (1 <= out["tcp_slave_id"] <= 247):
+        return None, "tcp_slave_id range 1-247"
     out["unit_map_ch0"] = (modbus.get("unit_map_ch0") or "1-127").strip()
     out["unit_map_ch1"] = (modbus.get("unit_map_ch1") or "").strip()
     out["ch0_enabled"] = _parse_bool(modbus.get("ch0_enabled", True))
@@ -205,7 +212,7 @@ def _sanitize_poller(poller):
     if not isinstance(rows, list):
         return None, "poller rows invalid"
     norm_rows = []
-    for row in rows:
+    for row in rows[:256]:
         if not isinstance(row, dict):
             continue
         ch = int(row.get("ch") or 0)

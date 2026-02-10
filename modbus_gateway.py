@@ -6,8 +6,11 @@ import time
 import Pico_RS485 as rs485
 from config_store import get_config
 from rs485_lock import acquire as lock_acquire, release as lock_release
+from register_store import get_regs
 
 server_sock = None
+LOG_TCP = True
+TCP_IDLE_TIMEOUT_MS = None
 
 
 def _crc16(data: bytes) -> int:
@@ -61,7 +64,7 @@ def _parse_unit_map(expr: str):
     return ids
 
 
-def _unit_id_to_channel(unit_id: int, cfg) -> int:
+def _unit_id_to_channel(unit_id: int, cfg) -> int | None:
     modbus_cfg = cfg.get("modbus") or {}
     ch0_expr = (modbus_cfg.get("unit_map_ch0") or "").strip()
     ch1_expr = (modbus_cfg.get("unit_map_ch1") or "").strip()
@@ -173,17 +176,19 @@ def start_modbus_tcp_server(port: int = 502):
     print("Modbus TCP server listening on", addr)
 
 
-def _read_exact(sock, size: int, timeout_ms: int = 1000) -> bytes:
+def _read_exact(sock, size: int, timeout_ms: int = 1000):
     data = b""
     t0 = time.ticks_ms()
     while len(data) < size and time.ticks_diff(time.ticks_ms(), t0) < timeout_ms:
         try:
             chunk = sock.recv(size - len(data))
         except OSError:
-            return data
+            return None if not data else data
         if not chunk:
-            break
+            return b"" if not data else data
         data += chunk
+    if len(data) < size:
+        return None if not data else data
     return data
 
 
@@ -197,72 +202,119 @@ def poll_modbus_tcp_server():
         return
 
     try:
-        cl.settimeout(3)
-        head = _read_exact(cl, 7, timeout_ms=800)
-        if len(head) < 7:
-            return
-        tid = head[0:2]
-        pid = head[2:4]
-        length = (head[4] << 8) | head[5]
-        unit_id = head[6]
-        if pid != b"\x00\x00":
-            return
-        body = _read_exact(cl, max(0, length - 1), timeout_ms=800)
-        if len(body) < max(0, length - 1):
-            return
-        pdu = body
+        if LOG_TCP:
+            print("TCP CONNECT:", addr)
+        cl.settimeout(0.2)
+        last_rx = time.ticks_ms()
+        while True:
+            head = _read_exact(cl, 7, timeout_ms=800)
+            if head is None:
+                if TCP_IDLE_TIMEOUT_MS is not None and time.ticks_diff(time.ticks_ms(), last_rx) > TCP_IDLE_TIMEOUT_MS:
+                    break
+                continue
+            if head == b"":
+                break
+            if len(head) < 7:
+                break
+            last_rx = time.ticks_ms()
+            tid = head[0:2]
+            pid = head[2:4]
+            length = (head[4] << 8) | head[5]
+            unit_id = head[6]
+            if pid != b"\x00\x00":
+                break
+            body = _read_exact(cl, max(0, length - 1), timeout_ms=800)
+            if body is None and length > 1:
+                if TCP_IDLE_TIMEOUT_MS is not None and time.ticks_diff(time.ticks_ms(), last_rx) > TCP_IDLE_TIMEOUT_MS:
+                    break
+                continue
+            if body == b"" and length > 1:
+                break
+            if body is None:
+                break
+            if len(body) < max(0, length - 1):
+                break
+            last_rx = time.ticks_ms()
+            pdu = body
+            if LOG_TCP:
+                print("TCP RX:", _hex_line(head + body))
 
-        cfg = get_config()
-        modbus_cfg = cfg.get("modbus") or {}
-        timeout_ms = int(modbus_cfg.get("response_timeout_ms") or 1200)
-        ch = _unit_id_to_channel(unit_id, cfg)
-        if ch is None:
-            resp_pdu = _make_exception_pdu(pdu, 0x0B)
-            _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-            return
-        if not lock_acquire(ch):
-            resp_pdu = _make_exception_pdu(pdu, 0x06)
-            _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-            return
+            cfg = get_config()
+            modbus_cfg = cfg.get("modbus") or {}
+            timeout_ms = int(modbus_cfg.get("response_timeout_ms") or 1200)
+            tcp_slave_id = int(modbus_cfg.get("tcp_slave_id") or 1)
 
-        try:
-            ch_cfg = (modbus_cfg.get("ch0") if ch == 0 else modbus_cfg.get("ch1")) or {}
-            mode = (ch_cfg.get("mode") or "rtu").lower()
-            rs485.init(
-                ch,
-                baudrate=int(ch_cfg.get("baudrate") or 9600),
-                parity=ch_cfg.get("parity") or "N",
-                stopbits=int(ch_cfg.get("stopbits") or 1),
-                bits=int(ch_cfg.get("bits") or 8),
-            )
-            if unit_id == 0:
+            # 若 Unit ID 為本地 TCP Slave ID，直接回傳本地 registers
+            if unit_id == tcp_slave_id:
+                if len(pdu) >= 5 and pdu[0] in (0x03, 0x04):
+                    addr = (pdu[1] << 8) | pdu[2]
+                    count = (pdu[3] << 8) | pdu[4]
+                    if count <= 0 or addr < 0 or addr + count > 256:
+                        resp_pdu = _make_exception_pdu(pdu, 0x02)
+                        _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                        continue
+                    regs = get_regs(addr, count)
+                    data = bytearray()
+                    for v in regs:
+                        data.append((v >> 8) & 0xFF)
+                        data.append(v & 0xFF)
+                    resp_pdu = bytes([pdu[0], len(data)]) + bytes(data)
+                    _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                    continue
+                resp_pdu = _make_exception_pdu(pdu, 0x01)
+                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                continue
+
+            ch = _unit_id_to_channel(unit_id, cfg)
+            if ch is None:
                 resp_pdu = _make_exception_pdu(pdu, 0x0B)
                 _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-                return
-            if mode == "ascii":
-                frame = _build_ascii_frame(unit_id, pdu)
-                rs485.flush_input(ch)
-                rs485.send(ch, frame)
-                raw = _read_ascii_response(ch, timeout_ms)
-                resp_unit, resp_pdu = _parse_ascii_frame(raw)
-            else:
-                frame = _build_rtu_frame(unit_id, pdu)
-                rs485.flush_input(ch)
-                rs485.send(ch, frame)
-                raw = _read_rtu_response(ch, timeout_ms, int(ch_cfg.get("baudrate") or 9600))
-                resp_unit, resp_pdu = _parse_rtu_frame(raw)
-
-            if resp_unit is None or resp_pdu is None:
-                resp_pdu = _make_exception_pdu(pdu, 0x0B)
+                continue
+            if not lock_acquire(ch):
+                resp_pdu = _make_exception_pdu(pdu, 0x06)
                 _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-                return
-            _send_mb_tcp_response(cl, tid, resp_unit, resp_pdu)
-        finally:
-            lock_release(ch)
+                continue
+
+            try:
+                ch_cfg = (modbus_cfg.get("ch0") if ch == 0 else modbus_cfg.get("ch1")) or {}
+                mode = (ch_cfg.get("mode") or "rtu").lower()
+                rs485.init(
+                    ch,
+                    baudrate=int(ch_cfg.get("baudrate") or 9600),
+                    parity=ch_cfg.get("parity") or "N",
+                    stopbits=int(ch_cfg.get("stopbits") or 1),
+                    bits=int(ch_cfg.get("bits") or 8),
+                )
+                if unit_id == 0:
+                    resp_pdu = _make_exception_pdu(pdu, 0x0B)
+                    _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                    continue
+                if mode == "ascii":
+                    frame = _build_ascii_frame(unit_id, pdu)
+                    rs485.flush_input(ch)
+                    rs485.send(ch, frame)
+                    raw = _read_ascii_response(ch, timeout_ms)
+                    resp_unit, resp_pdu = _parse_ascii_frame(raw)
+                else:
+                    frame = _build_rtu_frame(unit_id, pdu)
+                    rs485.flush_input(ch)
+                    rs485.send(ch, frame)
+                    raw = _read_rtu_response(ch, timeout_ms, int(ch_cfg.get("baudrate") or 9600))
+                    resp_unit, resp_pdu = _parse_rtu_frame(raw)
+
+                if resp_unit is None or resp_pdu is None:
+                    resp_pdu = _make_exception_pdu(pdu, 0x0B)
+                    _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                    continue
+                _send_mb_tcp_response(cl, tid, resp_unit, resp_pdu)
+            finally:
+                lock_release(ch)
     except Exception as e:
         print("Modbus TCP error:", e)
     finally:
         try:
+            if LOG_TCP:
+                print("TCP DISCONNECT:", addr)
             cl.close()
         except Exception:
             pass
@@ -271,4 +323,9 @@ def poll_modbus_tcp_server():
 def _send_mb_tcp_response(sock, tid: bytes, unit_id: int, pdu: bytes):
     length = len(pdu) + 1
     mbap = tid + b"\x00\x00" + bytes([(length >> 8) & 0xFF, length & 0xFF, unit_id & 0xFF])
-    sock.send(mbap + pdu)
+    payload = mbap + pdu
+    if LOG_TCP:
+        print("TCP TX:", _hex_line(payload))
+    sock.send(payload)
+def _hex_line(buf: bytes) -> str:
+    return " ".join("%02X" % b for b in buf)

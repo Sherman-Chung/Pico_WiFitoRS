@@ -2,15 +2,18 @@
 
 這份專案讓 Raspberry Pi Pico 2 W 同時提供：
 - 內建 AP（預設 SSID `PicoSetup` / 密碼 `pico1234`）+ Captive DNS，手機可直接連線設定。
+- Captive DNS 會將 `www.pico.pi.com` 等網域導向 `192.168.4.1`。
 - STA 模式連上家用 Wi‑Fi 後，可保存設定，斷電不遺失。
 - 2‑Port Modbus RTU/ASCII ↔ 1‑Port Modbus TCP 閘道器（TCP 502）。
 - Web UI 可設定 CH0/CH1 參數、輪詢表格與 RS485 HEX 測試。
 - 可顯示供電來源（外部/電池/待機）與電量百分比。
+- 輪詢表格上限 256 筆，對應本地 0-255 registers，可由 Modbus TCP 讀取。
+- Modbus TCP 使用長連線模式，連線會維持到 Client 主動斷線（Console 會印 RX/TX/連線狀態）。
 
 ## 啟動流程
 1. `main.py` 啟動後依 `config.py` 決定是否自動開 AP (`AUTO_CONFIG_AP_ON_BOOT`)。  
 2. 開 AP 時同步啟動 Captive DNS（將任何網域導向 `192.168.4.1`），立即啟動 TCP/HTTP 伺服器。  
-3. 連上家用 Wi‑Fi 後可透過 mDNS（`pico.local`，若未被占用）或取得的 IP 連線。  
+3. AP/STA 可並行；連上家用 Wi‑Fi 後可透過 mDNS（`pico.local`，若未被占用）或取得的 IP 連線。  
 4. 若已保存 STA 設定，開機會自動嘗試連線。
 
 ## 純 Web 版本
@@ -72,3 +75,4 @@
 - 狀態：`curl http://192.168.4.1/wifi/status`。  
 - RS485 HEX：`echo 'RS HEX 0 06 05 00 01 FF 00 A2 ED' | nc 192.168.4.1 12345`。  
 - Modbus TCP：Client 連 `502` 並送 MBAP+PDU。
+  - 本地 Registers 讀取：Unit ID 設為 TCP Slave ID，讀取 0-255。

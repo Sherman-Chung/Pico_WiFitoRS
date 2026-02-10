@@ -235,6 +235,14 @@ WEB_PAGE = """<!DOCTYPE html>
       </div>
       <div class="row" style="margin-top:10px;">
         <div>
+          <!-- 本地 TCP Slave ID -->
+          <label>TCP Slave ID（讀取本地 Registers）</label>
+          <input id="tcp-slave-id" class="gw-field" type="number" value="1" min="1" max="247" />
+        </div>
+        <div></div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div>
           <label>
             <!-- 啟用/停用 CH0 -->
             <input type="checkbox" id="ch0-enabled" class="gw-field" checked />
@@ -445,6 +453,7 @@ WEB_PAGE = """<!DOCTYPE html>
       <div class="note" id="poll-ch-status"></div>
       <!-- RS485 TX/RX 狀態 -->
       <div class="note mono" id="poll-comm"></div>
+      <div class="note">輪詢表格上限 256 筆，對應本地 0-255 registers。</div>
       <div style="overflow-x:auto;margin-top:8px;">
         <table>
           <thead>
@@ -611,6 +620,7 @@ WEB_PAGE = """<!DOCTYPE html>
       .then(d => {
         var mb = d.modbus || {};
         document.getElementById('mb-timeout').value = mb.response_timeout_ms || 1200;
+        document.getElementById('tcp-slave-id').value = mb.tcp_slave_id || 1;
         document.getElementById('gw-status').textContent = '已儲存';
         document.getElementById('ch0-enabled').checked = mb.ch0_enabled !== false;
         document.getElementById('ch1-enabled').checked = mb.ch1_enabled !== false;
@@ -697,6 +707,10 @@ WEB_PAGE = """<!DOCTYPE html>
   });
 
   function addRow() {
+    if (pollRows.length >= 256) {
+      document.getElementById('poll-status').textContent = '已達 256 筆上限';
+      return;
+    }
     pollRows.push({ ch: '0', station: '01', cmd: '03', reg: '0000', data: '0001', ret: '' });
     renderPollRows();
   }
@@ -807,6 +821,7 @@ WEB_PAGE = """<!DOCTYPE html>
       modbus: {
         tcp_port: 502,
         response_timeout_ms: Number(document.getElementById('mb-timeout').value || 1200),
+        tcp_slave_id: Number(document.getElementById('tcp-slave-id').value || 1),
         ch0: {
           mode: document.getElementById('ch0-mode').value,
           baudrate: Number(document.getElementById('ch0-baud').value || 9600),

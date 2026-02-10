@@ -8,6 +8,9 @@
 - **純 Web 版本**：移除 LCD/按鍵，所有操作透過 Web UI 完成。  
 - **預設狀態**：CH0/CH1 預設關閉，需在 Gateway 設定中啟用。  
 - **供電來源顯示**：可依 INA219 電流方向判斷外部供電/電池供電/待機（提示用途）。  
+- **本地 Registers**：輪詢表格上限 256 筆，對應本地 0‑255 registers。  
+- **TCP 長連線**：TCP 連線維持到 Client 主動斷線，Console 會顯示 RX/TX/連線狀態。  
+- **Captive DNS**：AP 模式下任何網域（例如 `www.pico.pi.com`）會導向 192.168.4.1。  
 
 ---
 
@@ -45,6 +48,7 @@
 2. 同步啟動 HTTP/TCP/Modbus 服務，不需等待手機連線。  
 3. 若已保存 STA，會自動嘗試連線。  
 4. Web UI 透過 `http://192.168.4.1` 或 STA IP 存取。  
+5. AP/STA 可並行，DNS 會依 AP 連線狀態自動回應對應 IP。  
 
 ---
 
@@ -53,12 +57,14 @@
 - CH0/CH1 模式：RTU / ASCII  
 - UART 參數：baud/parity/stopbits/bits  
 - 啟用/停用 CH0/CH1  
+- TCP Slave ID（本地 Registers 讀取）  
 - 設定永久保存（狀態顯示「已儲存／請儲存設定」）  
 
 ### 5.2 AP / STA 設定
 - AP SSID/密碼可更新  
 - STA 連線可保存，斷電不遺失  
 - 顯示供電來源（外部/電池/待機）與電量百分比  
+- AP 模式下 `www.pico.pi.com` 之類的網域會被導向 192.168.4.1  
 
 ### 5.3 RS485 HEX 測試
 - 選擇 CH0/CH1  
@@ -70,6 +76,9 @@
 - Data 在 03/04 代表「讀取數量」  
 - 支援新增/刪除/儲存/啟動  
 - Return 顯示解析後回覆或錯誤狀態  
+- 輪詢表格最多 256 筆，依序對應本地 0‑255 registers  
+- 回覆寫入本地 registers：第 0 列 → Reg0、第 1 列 → Reg1，以此類推  
+- 03/04 會依 byte count 寫入多筆 registers；05/06 只寫入一筆  
 
 ---
 
@@ -87,6 +96,13 @@
 
 ### 6.3 轉換流程
 TCP 收到 MBAP+PDU → 擷取 Unit ID/PDU → 組成 RTU/ASCII → 送 RS485 → 收回覆 → 包回 MBAP 回覆 TCP。  
+
+### 6.4 TCP 連線行為
+- 採用長連線模式，連線會維持直到 Client 主動斷線。  
+- 連線/斷線與 RX/TX 會在 console 顯示除錯字串。  
+### 6.5 本地 Registers 與 TCP Slave ID
+- TCP Unit ID 等於 `TCP Slave ID` 時，回覆本地 0‑255 registers。  
+- 其他 Unit ID 會依 Unit Map 對應 CH0/CH1 走 RS485 轉送。  
 
 ---
 

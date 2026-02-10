@@ -174,7 +174,7 @@ def main():
         poll_http_server()
         poll_modbus_tcp_server()
         poller_tick()
-        time.sleep_ms(200)
+        time.sleep_ms(20)
 
 
 # 進入點
