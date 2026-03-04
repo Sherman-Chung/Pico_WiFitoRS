@@ -1,0 +1,147 @@
+<mxfile host="app.diagrams.net" modified="2026-03-04T00:00:00.000Z" agent="Codex" version="20.8.20" type="device">
+  <diagram id="http-flow" name="HTTP Flow">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="h_start" value="處理網頁請求" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="40" width="220" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_sock" value="伺服器已開?" style="rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="110" y="130" width="140" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_return1" value="先回去" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="140" width="120" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_accept" value="接收連線" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="250" width="220" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_read" value="讀取請求" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="330" width="220" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_parse" value="看他要哪個功能" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="410" width="220" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_route" value="分流" style="rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="110" y="500" width="140" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_root" value="回首頁(網頁)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="460" width="200" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_else" value="看不懂就回首頁" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="540" width="200" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_scan" value="掃描 Wi‑Fi" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="420" width="200" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_status" value="看連線狀態 + 電量" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="500" width="220" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_connect" value="連上指定 Wi‑Fi&#xa;(可選存設定)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="590" width="220" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_pcfg" value="看輪詢設定" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="420" width="200" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_pstart" value="開始輪詢" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="490" width="200" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_pstop" value="停止輪詢" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="570" width="200" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_pstatus" value="看輪詢狀態" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="650" width="200" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_cfg" value="讀/寫設定" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="460" width="200" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_reset" value="清空設定 + 重開機" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="550" width="220" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="h_cmd" value="執行指令" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="640" width="200" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="he1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_start" target="h_sock">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he2" value="否" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_sock" target="h_return1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he3" value="是" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_sock" target="h_accept">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_accept" target="h_read">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_read" target="h_parse">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_parse" target="h_route">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="he7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_root">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_else">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="he9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_scan">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_status">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_connect">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="he12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_pcfg">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_pstart">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_pstop">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_pstatus">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="he16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_cfg">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_reset">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="he18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="h_route" target="h_cmd">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
