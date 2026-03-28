@@ -1,178 +1,193 @@
-# Pico 2 W WiFi Modbus Gateway 專案手冊
+# Pico 2 W Wi-Fi Modbus Gateway 專案手冊
+
+本手冊內容已與 `README_zh.md`、`flowcharts.md` 同步，以下敘述以目前程式行為為準。
 
 ---
 
-## 1. 專案定位與特色
-- **目標**：以 Raspberry Pi Pico 2 W 為核心，提供 2‑Port Modbus RTU/ASCII ↔ 1‑Port Modbus TCP 閘道器。  
-- **連線模式**：AP 點對點 + STA 連線既有網路，可保存設定。  
-- **純 Web 版本**：移除 LCD/按鍵，所有操作透過 Web UI 完成。  
-- **預設狀態**：CH0/CH1 預設關閉，需在 Gateway 設定中啟用。  
-- **供電來源顯示**：可依 INA219 電流方向判斷外部供電/電池供電/待機（提示用途）。  
-- **本地 Registers**：輪詢表格上限 256 筆，對應本地 0‑255 registers。  
-- **TCP 長連線**：TCP 連線維持到 Client 主動斷線，Console 會顯示 RX/TX/連線狀態。  
-- **Captive DNS**：AP 模式下任何網域（例如 `www.pico.pi.com`）會導向 192.168.4.1。  
+## 1. 專案定位
+- 目標：提供 2-Port Modbus RTU/ASCII <-> 1-Port Modbus TCP Gateway。
+- 平台：Raspberry Pi Pico 2 W（純 Web 介面版本，無 LCD/按鍵 UI）。
+- 網路模式：AP + STA 並行。
+- 設定保存：AP/STA/Modbus/Poller 皆可持久化。
+- 本地暫存器：0-255（16-bit），供 Poller 回填與 Modbus TCP 讀取。
 
 ---
 
-## 2. 硬體架構
-### 2.1 硬體清單
-- Raspberry Pi Pico 2 W  
-- Pico-2CH-RS485  
-- Pico-UPS-B  
-- RS485 Slave 裝置  
-- USB 供電或電池  
+## 2. 系統總覽
+### 2.1 主要功能
+- AP 設定入口（預設 `PicoSetup` / `pico1234`）。
+- Captive DNS（所有查詢導向目標 IP）。
+- mDNS（`pico.local` A 記錄）。
+- HTTP API + Web UI（Port 80）。
+- 指令 TCP Server（Port 12345）。
+- Modbus TCP Server（預設 Port 502，可調）。
+- Poller 週期通訊與結果回填。
 
-### 2.2 介面對應
-- UART0 (GP0/GP1) → RS485 CH0  
-- UART1 (GP4/GP5) → RS485 CH1  
-- I2C → UPS/INA219  
-- Wi‑Fi AP/STA 共用  
-
----
-
-## 3. 軟體模組與職責
-- `main.py`：純 Web 主程式；啟動 AP/伺服器/mDNS，輪詢 TCP/HTTP/Modbus/輪詢表格  
-- `modbus_gateway.py`：Modbus TCP ↔ RTU/ASCII 轉換  
-- `poller.py`：輪詢表格循環送出與回覆解析  
-- `Web_Page.py`：Web UI + HTTP API  
-- `Server_CMD.py`：RS485 HEX 測試指令  
-- `config_store.py`：設定永久保存（AP/STA/Modbus/輪詢）  
-- `Pico_RS485.py`：UART/RS485 收發封裝  
-- `wifi_Scan_Connect.py`：Wi‑Fi 管理（AP/STA）  
-- `Pico_UPS.py`：電源監測  
+### 2.2 模組分工
+- `main.py`：系統啟動、健康檢查、主迴圈排程。
+- `wifi_Scan_Connect.py`：STA/AP、掃描、連線、Captive DNS。
+- `Web_Page.py`：HTTP Server、Web UI、設定與輪詢 API。
+- `modbus_gateway.py`：Modbus TCP 與 RTU/ASCII 轉換。
+- `poller.py`：輪詢表格執行與 registers 回填。
+- `Server_CMD.py`：指令 TCP Server 與命令解析。
+- `config_store.py`：設定載入、驗證、保存。
+- `register_store.py`：本地 0-255 registers。
+- `rs485_lock.py`：CH0/CH1 通道互斥鎖。
 
 ---
 
-## 4. 開機流程（純 Web 版）
-1. 開機啟動 AP（預設 `PicoSetup / pico1234`）與 Captive DNS。  
-2. 同步啟動 HTTP/TCP/Modbus 服務，不需等待手機連線。  
-3. 若已保存 STA，會自動嘗試連線。  
-4. Web UI 透過 `http://192.168.4.1` 或 STA IP 存取。  
-5. AP/STA 可並行，DNS 會依 AP 連線狀態自動回應對應 IP。  
+## 3. 開機狀態機
+1. 讀取 `AUTO_CONFIG_AP_ON_BOOT` 與 `config_store`。
+2. 若 `AUTO_CONFIG_AP_ON_BOOT=True`：
+   - 先啟動 AP、Captive DNS、HTTP/TCP/Modbus 服務、mDNS。
+3. 若有保存 STA，嘗試 STA 連線。
+4. 執行開機檢查：
+   - UPS/INA219 檢查。
+   - 已啟用 RS485 通道初始化檢查。
+5. 若檢查失敗，進入 `fail_halt()`（LED 閃爍，停止服務循環）。
+6. 若前面未啟 AP 或未啟服務，於此階段補啟。
+7. 進入主迴圈：每 20ms 依序輪詢 `poll_cmd_server`、`poll_http_server`、`poll_modbus_tcp_server`、`poller.tick()`。
+
+重點：
+- `AUTO_CONFIG_AP_ON_BOOT` 只影響 AP/服務的啟動時機。
+- 在「檢查成功」的正常流程下，系統最終會確保 AP 與服務可用。
 
 ---
 
-## 5. Web UI 功能
-### 5.1 Gateway 設定
-- CH0/CH1 模式：RTU / ASCII  
-- UART 參數：baud/parity/stopbits/bits  
-- 啟用/停用 CH0/CH1  
-- TCP Slave ID（本地 Registers 讀取）  
-- 設定永久保存（狀態顯示「已儲存／請儲存設定」）  
+## 4. Wi-Fi / DNS / mDNS 行為
+### 4.1 AP/STA
+- STA 用於連到既有網路。
+- AP 提供手機/筆電直接設定入口。
+- AP 與 STA 可同時開啟。
 
-### 5.2 AP / STA 設定
-- AP SSID/密碼可更新  
-- STA 連線可保存，斷電不遺失  
-- 顯示供電來源（外部/電池/待機）與電量百分比  
-- AP 模式下 `www.pico.pi.com` 之類的網域會被導向 192.168.4.1  
+### 4.2 Captive DNS
+- `dns_captive.py` 會回應 A 記錄，TTL 30s。
+- `wifi_Scan_Connect._dns_target_ip()` 選擇回覆 IP：
+  - AP 有 station -> `192.168.4.1`
+  - 否則 STA 已連線 -> STA IP
+  - 其餘 -> `192.168.4.1`
 
-### 5.3 RS485 HEX 測試
-- 選擇 CH0/CH1  
-- 輸入 6 bytes → 自動補 CRC  
-- 輸入 8 bytes → 直接送出  
-
-### 5.4 輪詢表格
-欄位：`CH / Station / Modbus CMD / REG Address / Data / Return`  
-- Data 在 03/04 代表「讀取數量」  
-- 支援新增/刪除/儲存/啟動  
-- Return 顯示解析後回覆或錯誤狀態  
-- 輪詢表格最多 256 筆，依序對應本地 0‑255 registers  
-- 回覆寫入本地 registers：第 0 列 → Reg0、第 1 列 → Reg1，以此類推  
-- 03/04 會依 byte count 寫入多筆 registers；05/06 只寫入一筆  
+### 4.3 mDNS
+- `mdns_service.py` 回覆 `pico.local` 的 A 記錄。
+- 使用 multicast `224.0.0.251:5353`。
 
 ---
 
-## 6. Modbus TCP ↔ RTU/ASCII
-### 6.1 Modbus TCP 封包格式（MBAP + PDU）
-- Transaction ID：2 bytes  
-- Protocol ID：2 bytes（固定 0x0000）  
-- Length：2 bytes（Unit ID + PDU 長度）  
-- Unit ID：1 byte  
-- PDU：功能碼 + 資料  
+## 5. HTTP 介面（Port 80）
+### 5.1 API 一覽
+- `GET /`：回 Web UI。
+- `GET /wifi/scan`：掃描 AP 清單。
+- `GET /wifi/status`：STA/AP/IP/RSSI、供電與電量。
+- `POST /wifi/connect`：連線 STA（可保存）。
+- `GET /cfg`：讀完整設定。
+- `POST /cfg`：更新設定。
+- `POST /cfg/reset`：清空設定並 `machine.reset()`。
+- `GET /poller/config`：讀 Poller 設定。
+- `POST /poller/start`：啟用 Poller（可同時提交 Poller 設定）。
+- `POST /poller/stop`：停用 Poller。
+- `GET /poller/status`：讀 Poller 執行狀態。
+- `POST /cmd`：文字命令代理到 `Server_CMD.handle_cmd`。
 
-### 6.2 RTU/ASCII 校驗
-- RTU：CRC‑16 (poly 0xA001, init 0xFFFF)  
-- ASCII：LRC  
-
-### 6.3 轉換流程
-TCP 收到 MBAP+PDU → 擷取 Unit ID/PDU → 組成 RTU/ASCII → 送 RS485 → 收回覆 → 包回 MBAP 回覆 TCP。  
-
-### 6.4 TCP 連線行為
-- 採用長連線模式，連線會維持直到 Client 主動斷線。  
-- 連線/斷線與 RX/TX 會在 console 顯示除錯字串。  
-### 6.5 本地 Registers 與 TCP Slave ID
-- TCP Unit ID 等於 `TCP Slave ID` 時，回覆本地 0‑255 registers。  
-- 其他 Unit ID 會依 Unit Map 對應 CH0/CH1 走 RS485 轉送。  
+### 5.2 其他路由行為
+- `favicon` / `apple-touch-icon` 路由回 `204 No Content`。
+- 未知路徑回主頁 HTML。
 
 ---
 
-## 7. 輪詢表格範例
-### 7.1 寫入線圈 (Function 05)
-CH: CH1 / Station: 06 / CMD: 05 / REG: 0001 / Data: FF00  
-RTU 送出：`06 05 00 01 FF 00 ?? ??`（CRC 自動補）  
+## 6. Modbus Gateway（Port 502）
+### 6.1 TCP 連線模型
+- 採長連線模式。
+- 每次 `accept()` 一個 client 後，持續在同連線讀取多筆 MBAP+PDU，直到 client 關閉或錯誤。
 
-### 7.2 讀取暫存器 (Function 03)
-CH: CH0 / Station: 01 / CMD: 03 / REG: 0000 / Data: 0002  
-RTU 送出：`01 03 00 00 00 02 ?? ??`  
-回覆範例：`01 03 04 00 0A 00 14 ?? ??` → Return `00 0A 00 14`  
+### 6.2 路由與回應
+- `Unit ID == tcp_slave_id`：
+  - 僅支援 Function 03/04 讀本地 registers。
+  - 位址/數量非法回 Exception `0x02`。
+  - 其他功能碼回 Exception `0x01`。
+- 其他 Unit ID：
+  - 依 `unit_map_ch0/ch1` + `ch0_enabled/ch1_enabled` 決定通道。
+  - 無映射/未啟用/不可用回 Exception `0x0B`。
+  - 通道鎖失敗回 Exception `0x06`。
+  - 成功轉送 RS485 RTU/ASCII 並回封裝後 MBAP。
+
+### 6.3 RS485 轉送流程
+1. 依通道配置初始化 UART（baud/parity/stopbits/bits）。
+2. `mode=rtu` 時組 RTU frame + CRC16；`mode=ascii` 時組 ASCII frame + LRC。
+3. 發送後等待回覆並解析。
+4. 回覆無效/校驗失敗/逾時 -> Exception `0x0B`。
+5. 每筆轉送後釋放通道鎖。
 
 ---
 
-## 8. Modbus TCP 封包範例
-### 8.1 Read Holding Registers (03)
-TCP Hex：`00 01 00 00 00 06 01 03 00 00 00 02`  
+## 7. Poller
+### 7.1 基本規則
+- 設定來源：`config_store.poller`。
+- 表格最多 256 列（儲存時會正規化）。
+- `interval_ms` 小於 50 時會被提升為 50。
+- 每次 `tick()` 僅處理 1 列，依序循環。
 
-### 8.2 Write Single Register (06)
-TCP Hex：`00 02 00 00 00 06 01 06 00 01 00 55`  
+### 7.2 每列欄位
+- `ch`：`0` 或 `1`
+- `station`：Hex（1 byte）
+- `cmd`：Hex（1 byte）
+- `reg`：Hex（2 bytes）
+- `data`：Hex（2 bytes）
+- `Return`：執行時回填，不存檔
 
-### 8.3 Write Multiple Registers (16 / 0x10)
-TCP Hex：`00 03 00 00 00 0B 01 10 00 01 00 02 04 00 0A 00 14`  
+### 7.3 回覆與本地 registers
+- 03/04：依回覆 Byte Count 轉為多筆 16-bit，從「列索引」起寫入本地 registers。
+- 05/06：寫入 1 筆 16-bit 到「列索引」。
+- 通道忙碌或異常時，`Return` 可能顯示：
+  - `BUSY` / `DISABLED` / `BAD ROW` / `TIMEOUT` / `BAD CRC` / `STA MISMATCH`
 
 ---
 
-## 9. 錯誤回覆（Exception Code）
-RTU：`01 83 02 ?? ??`  
-TCP：`00 01 00 00 00 03 01 83 02`  
+## 8. 指令 TCP（Port 12345）
+- 每次連線只處理一筆命令後關閉。
+- 常用命令：
+  - `SYS STATUS`
+  - `SYS WIFI [RESET]`
+  - `SYS AP RESET`
+  - `SYS PING`
+  - `LED ON` / `LED OFF`
+  - `RS HEX <ch> <8 bytes>`
+  - `RS RECV <ch> [max]`
+- `MB ...` 命令目前為示範回覆，不是 Gateway 主路徑。
 
-常見 Exception Code：  
-- 01: Illegal Function  
-- 02: Illegal Data Address  
-- 03: Illegal Data Value  
-- 06: Slave Device Busy  
+---
+
+## 9. 預設設定（`config_store`）
+- `ap.ssid="PicoSetup"`、`ap.password="pico1234"`
+- `sta.ssid=""`、`sta.password=""`
+- `poller.enabled=False`、`poller.interval_ms=1000`
+- `modbus.tcp_port=502`
+- `modbus.response_timeout_ms=1200`
+- `modbus.tcp_slave_id=1`
+- `modbus.unit_map_ch0="1-127"`
+- `modbus.unit_map_ch1=""`
+- `modbus.ch0_enabled=False`
+- `modbus.ch1_enabled=False`
 
 ---
 
 ## 10. 已知限制
-- Pico 2 W 僅支援 2.4GHz 802.11 b/g/n  
-- RS485 同通道半雙工，需序列化處理  
+- Pico 2 W 僅支援 2.4GHz 802.11 b/g/n。
+- RS485 同通道為半雙工，需要鎖保護序列化。
+- Modbus Gateway 為單執行緒輪詢架構，同時負載高時延遲會增加。
 
 ---
 
-## 11. 常見問題
-### 11.1 只有 TX 無 RX
-- 確認 A/B 接線與終端電阻  
-- 確認 baud/8N1 與功能碼  
-- Function 05 僅允許 FF00/0000  
-
-### 11.2 Web UI 連線異常
-- 手機關閉行動數據  
-- 忘記 Wi‑Fi 後重連  
-- 使用 `SYS WIFI RESET` 或 `SYS AP RESET`  
-### 11.3 供電來源顯示不準
-- 供電來源為推測結果，依 INA219 電流方向判斷  
-- 若方向顛倒可調整硬體接線或在程式內反轉判斷  
+## 11. 快速驗證
+- `curl http://192.168.4.1/wifi/status`
+- `echo 'SYS STATUS' | nc 192.168.4.1 12345`
+- `echo 'RS HEX 0 06 05 00 01 FF 00 A2 ED' | nc 192.168.4.1 12345`
+- 以 Modbus TCP Client 連 502 測試：
+  - Unit ID=`tcp_slave_id`：讀本地 registers
+  - Unit ID=unit map 範圍：轉送 CH0/CH1
 
 ---
 
-## 12. 擴充方向
-- 每列自訂輪詢間隔  
-- 回覆解析為數值/JSON  
-- 上傳雲端或資料庫  
-- 增加告警與事件記錄  
-
----
-
-## 13. 參考資料
-- Raspberry Pi Pico 2：<https://www.raspberrypi.com/products/raspberry-pi-pico-2/>  
-- Waveshare Pico-2CH-RS485：<https://www.waveshare.net/wiki/Pico-2CH-RS485>  
-- Waveshare Pico-UPS-B：<https://www.waveshare.net/wiki/Pico-UPS-B>  
+## 12. 參考資料
+- Raspberry Pi Pico 2：<https://www.raspberrypi.com/products/raspberry-pi-pico-2/>
+- Waveshare Pico-2CH-RS485：<https://www.waveshare.net/wiki/Pico-2CH-RS485>
+- Waveshare Pico-UPS-B：<https://www.waveshare.net/wiki/Pico-UPS-B>
