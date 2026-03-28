@@ -3,4 +3,5 @@ FORCE_HEADLESS = True
 
 # 開機時自動開 AP (PicoSetup/pico1234) + HTTP 設定頁，方便手機設定 Wi-Fi。
 # 若不需要可設 False。
+# 注意：此值主要影響「啟動時機」；main.py 仍有保底補啟 AP/服務邏輯。
 AUTO_CONFIG_AP_ON_BOOT = True

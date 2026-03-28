@@ -1,6 +1,10 @@
 # Pico_RS485.py - 簡易封裝 Pico-2CH-RS485 的 UART 介面
 # 兩組通道：CH0 使用 UART0 (GP0/GP1)，CH1 使用 UART1 (GP4/GP5)
 # 預設 9600-N-8-1；如需調整可呼叫 init(baudrate=...)
+#
+# 維護導讀：
+# - 此模組只做 UART 收發封裝，不做 Modbus 協議解析。
+# - 若改硬體腳位，修改 UART_PINS 即可。
 
 try:
     from typing import Union
@@ -17,6 +21,9 @@ UART_PINS = {
 _uart_cache = {}
 
 
+# =============== RS485 通道初始化 ===============
+# 說明：
+# 依通道與通訊參數建立 UART 實例，並更新快取。
 def init(
     ch: int = 0,
     baudrate: int = 9600,
@@ -49,12 +56,18 @@ def init(
     return uart
 
 
+# =============== 取得 UART 實例 ===============
+# 說明：
+# 優先回傳快取中的 UART；若不存在則自動初始化。
 def _get_uart(ch: int):
     if ch in _uart_cache:
         return _uart_cache[ch]
     return init(ch)
 
 
+# =============== RS485 資料送出 ===============
+# 說明：
+# 送出 bytes/str 資料到指定通道，並輸出 TX HEX 供除錯。
 def send(ch: int, data):
     """送出資料（bytes 或 str）。回傳送出位元組數。"""
     uart = _get_uart(ch)
@@ -66,6 +79,9 @@ def send(ch: int, data):
     return uart.write(data)
 
 
+# =============== RS485 資料接收 ===============
+# 說明：
+# 非阻塞讀取指定通道可用資料；若無資料回空 bytes。
 def recv(ch: int, max_bytes: int = 256, log: bool = True):
     """非阻塞讀取通道資料，回傳 bytes（可能為空）。"""
     uart = _get_uart(ch)
@@ -80,6 +96,9 @@ def recv(ch: int, max_bytes: int = 256, log: bool = True):
     return data
 
 
+# =============== RS485 輸入清空 ===============
+# 說明：
+# 讀掉 UART 輸入緩衝區殘留資料，避免舊封包干擾。
 def flush_input(ch: int):
     """讀掉目前輸入緩衝。"""
     uart = _get_uart(ch)

@@ -1,10 +1,16 @@
 # dns_captive.py - 極簡 DNS 假門牌伺服器：任何查詢都回指定 IP（可動態更新）
 # 僅支援最基本的 A 記錄，輕量且適合 Pico。
+#
+# 維護導讀：
+# - 若要改導向策略，優先改 ip_getter 回呼來源，不建議改 DNS 封包邏輯。
 
 import socket
 import _thread
 
 
+# =============== IPv4 字串轉位元組 ===============
+# 說明：
+# 將 dotted IPv4 字串轉為 4-byte 表示，供 DNS 回應封包使用。
 def _inet_aton(ip: str) -> bytes:
     """MicroPython 有時沒有 socket.inet_aton，自己轉換。"""
     if hasattr(socket, "inet_aton"):
@@ -30,6 +36,9 @@ if not hasattr(socket, "inet_aton"):
 
 
 class CaptiveDNS:
+    # =============== CaptiveDNS 建構子 ===============
+    # 說明：
+    # 初始化 DNS 服務參數，可透過 ip_getter 動態決定回覆 IP。
     def __init__(self, ip="192.168.4.1", port=53, ip_getter=None):
         # 若提供 ip_getter，每次回應都會取最新 IP（例如 STA IP）。
         self.ip = ip
@@ -39,6 +48,9 @@ class CaptiveDNS:
         self._thread = None
         self._running = False
 
+    # =============== CaptiveDNS 啟動 ===============
+    # 說明：
+    # 建立 UDP socket 並啟動背景執行緒處理查詢。
     def start(self):
         if self._running:
             return
@@ -53,6 +65,9 @@ class CaptiveDNS:
             print("Captive DNS start failed:", e)
             self.stop()
 
+    # =============== CaptiveDNS 停止 ===============
+    # 說明：
+    # 停止背景迴圈並釋放 socket 資源。
     def stop(self):
         self._running = False
         try:
@@ -63,6 +78,9 @@ class CaptiveDNS:
         self._sock = None
         self._thread = None
 
+    # =============== CaptiveDNS 主迴圈 ===============
+    # 說明：
+    # 持續接收 DNS 查詢並回覆 A 記錄到目標 IP。
     def _loop(self):
         # DNS header: ID(2) | flags(2) | QD(2) | AN(2) | NS(2) | AR(2)
         # 只回 A 記錄，且將查詢名稱指向指定 IP（或 ip_getter 回傳的 IP）。

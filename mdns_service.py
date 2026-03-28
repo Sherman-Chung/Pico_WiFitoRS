@@ -1,10 +1,16 @@
 # mdns_service.py - 簡易 mDNS responder：回答 <hostname>.local 的 A 記錄
 # 為節省資源僅支援基本 A 查詢，回應多播 224.0.0.251:5353。
+#
+# 維護導讀：
+# - 回覆資料僅包含 A 記錄，若要擴充 PTR/SRV/TXT 需補完整 DNS record 組包。
 
 import socket
 import _thread
 
 
+# =============== IPv4 字串轉位元組 ===============
+# 說明：
+# 將 dotted IPv4 字串轉為 4-byte 表示，供 mDNS 封包使用。
 def _inet_aton(ip: str) -> bytes:
     """MicroPython 有時沒有 socket.inet_aton，改用手動轉換。"""
     if hasattr(socket, "inet_aton"):
@@ -33,6 +39,9 @@ MDNS_PORT = 5353
 
 
 class MDNSResponder:
+    # =============== mDNS 建構子 ===============
+    # 說明：
+    # 初始化 hostname 與動態 IP 來源。
     def __init__(self, hostname="pico", ip_getter=None):
         self.hostname = hostname
         self.ip_getter = ip_getter or (lambda: "0.0.0.0")
@@ -40,6 +49,9 @@ class MDNSResponder:
         self._running = False
         self._thread = None
 
+    # =============== mDNS 啟動 ===============
+    # 說明：
+    # 建立 UDP multicast socket，並啟動背景回應迴圈。
     def start(self):
         if self._running:
             return
@@ -57,6 +69,9 @@ class MDNSResponder:
             print("mDNS start failed:", e)
             self.stop()
 
+    # =============== mDNS 停止 ===============
+    # 說明：
+    # 停止背景回應迴圈並釋放 socket。
     def stop(self):
         self._running = False
         try:
@@ -67,6 +82,9 @@ class MDNSResponder:
         self._sock = None
         self._thread = None
 
+    # =============== mDNS 主迴圈 ===============
+    # 說明：
+    # 監聽 mDNS 查詢，命中 hostname.local 時回覆 A 記錄。
     def _loop(self):
         """簡易 responder：只處理 A 紀錄且僅回 hostname.local 的查詢。"""
         target_name = (self.hostname + ".local").encode("utf-8")

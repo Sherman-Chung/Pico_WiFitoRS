@@ -1,4 +1,9 @@
 # config_store.py - persistent settings for AP/Modbus gateway
+#
+# 維護導讀：
+# - 此檔負責「設定檔 schema + 驗證 + 持久化」。
+# - 外部模組請只呼叫 get_config()/update_config()/reset_config()。
+# - _sanitize_* 系列是欄位合法性邊界，改 schema 時要同步更新。
 
 try:
     import ujson as json
@@ -8,7 +13,11 @@ except ImportError:
 _CFG_PATH = "config_store.json"
 
 
+# =============== 預設設定建立 ===============
+# 說明：
+# 定義系統完整預設值，作為設定檔缺漏欄位時的回填基準。
 def _default_config():
+    """專案完整預設設定（作為 schema baseline）。"""
     return {
         "ap": {"ssid": "PicoSetup", "password": "pico1234"},
         "sta": {"ssid": "", "password": ""},
@@ -27,7 +36,11 @@ def _default_config():
     }
 
 
+# =============== 設定遞迴合併 ===============
+# 說明：
+# 將來源設定遞迴覆蓋到目標設定，保留未覆蓋的既有欄位。
 def _merge(dst, src):
+    """遞迴合併 dict；src 覆蓋 dst。"""
     for k, v in (src or {}).items():
         if isinstance(v, dict) and isinstance(dst.get(k), dict):
             _merge(dst[k], v)
@@ -35,7 +48,11 @@ def _merge(dst, src):
             dst[k] = v
 
 
+# =============== 設定檔載入 ===============
+# 說明：
+# 從磁碟讀取設定檔，若不存在或格式錯誤則回退到預設設定。
 def load_config():
+    """從檔案讀設定，讀不到時回預設值。"""
     cfg = _default_config()
     try:
         with open(_CFG_PATH, "r") as f:
@@ -49,14 +66,22 @@ def load_config():
 _cache = None
 
 
+# =============== 取得設定快取 ===============
+# 說明：
+# 提供外部模組統一讀取入口；首次呼叫才會觸發實際讀檔。
 def get_config():
+    """取得快取設定；首次呼叫才實際讀檔。"""
     global _cache
     if _cache is None:
         _cache = load_config()
     return _cache
 
 
+# =============== AP 設定驗證 ===============
+# 說明：
+# 驗證 AP SSID/密碼欄位是否合法。
 def _sanitize_ap(ap):
+    """驗證 AP 設定。"""
     ssid = (ap.get("ssid") or "").strip()
     password = (ap.get("password") or "").strip()
     if not ssid:
@@ -66,7 +91,11 @@ def _sanitize_ap(ap):
     return {"ssid": ssid, "password": password}, None
 
 
+# =============== STA 設定驗證 ===============
+# 說明：
+# 驗證 STA SSID/密碼欄位是否合法。
 def _sanitize_sta(sta):
+    """驗證 STA 設定。"""
     ssid = (sta.get("ssid") or "").strip()
     password = (sta.get("password") or "").strip()
     if ssid and password and len(password) < 8:
@@ -74,7 +103,11 @@ def _sanitize_sta(sta):
     return {"ssid": ssid, "password": password}, None
 
 
+# =============== 單通道通訊參數驗證 ===============
+# 說明：
+# 驗證 CH0/CH1 的 mode/baudrate/parity/stopbits/bits 參數。
 def _sanitize_ch(ch):
+    """驗證單一 RS485 通道設定。"""
     out = {}
     mode = (ch.get("mode") or "rtu").strip().lower()
     if mode not in ("rtu", "ascii"):
@@ -103,7 +136,11 @@ def _sanitize_ch(ch):
     return out, None
 
 
+# =============== Modbus 設定驗證 ===============
+# 說明：
+# 驗證整體 Modbus 區塊，包含 TCP 參數、Unit 映射與兩通道設定。
 def _sanitize_modbus(modbus):
+    """驗證整體 Modbus 設定。"""
     out = {}
     try:
         out["tcp_port"] = int(modbus.get("tcp_port") or 502)
@@ -134,7 +171,11 @@ def _sanitize_modbus(modbus):
     return out, None
 
 
+# =============== 布林值標準化 ===============
+# 說明：
+# 將 API 傳入值（bool/str/int）統一轉成布林值。
 def _parse_bool(val):
+    """將 API 輸入常見型別轉成 bool。"""
     if isinstance(val, bool):
         return val
     if isinstance(val, str):
@@ -147,9 +188,20 @@ def _parse_bool(val):
         return bool(val)
 
 
+# =============== 設定更新與持久化 ===============
+# 說明：
+# 套用 patch、執行欄位驗證、寫回檔案並更新快取。
 def update_config(patch):
+    """
+    套用 patch 並保存設定。
+
+    回傳：(ok, error, cfg)
+    - ok=True 代表已寫入並更新快取
+    - ok=False 時 cfg 為舊設定
+    """
     global _cache
     cfg = get_config()
+    # 先從磁碟重新讀一次，避免覆蓋其他來源剛寫入的值
     new_cfg = load_config()
     _merge(new_cfg, cfg)
     _merge(new_cfg, patch or {})
@@ -187,7 +239,11 @@ def update_config(patch):
         return False, str(e), cfg
 
 
+# =============== 設定重置 ===============
+# 說明：
+# 刪除設定檔並回復預設設定內容。
 def reset_config():
+    """刪除設定檔並回到預設設定。"""
     global _cache
     try:
         import os
@@ -199,7 +255,11 @@ def reset_config():
     return _cache
 
 
+# =============== 輪詢設定驗證 ===============
+# 說明：
+# 驗證 poller 參數與每列格式，並限制最大列數與最小間隔。
 def _sanitize_poller(poller):
+    """驗證 Poller 設定與每列欄位格式。"""
     out = {}
     out["enabled"] = _parse_bool(poller.get("enabled", False))
     try:
@@ -237,7 +297,11 @@ def _sanitize_poller(poller):
     return out, None
 
 
+# =============== Hex 欄位正規化 ===============
+# 說明：
+# 將 hex 字串轉為固定寬度大寫格式，供設定檔保存。
 def _norm_hex(val, width):
+    """把 hex 字串正規化成固定寬度大寫字串。"""
     s = (str(val) if val is not None else "").strip()
     if s.lower().startswith("0x"):
         s = s[2:]

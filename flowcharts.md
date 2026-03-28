@@ -6,8 +6,8 @@ flowchart TD
   %% ========================
   %% Main / Boot
   %% ========================
-  M1[開機 Boot] --> M2[讀取 config 與 AUTO_CONFIG_AP_ON_BOOT]
-  M2 --> M3{AUTO_CONFIG_AP_ON_BOOT ?}
+  M1[開機 Boot] --> M2[讀取 config 與 開機自動開啟AP設定 ]
+  M2 --> M3{開機自動開啟AP設定 是否啟用?}
   M3 -->|Yes| M4[先啟 AP + Captive DNS + HTTP TCP Modbus + mDNS]
   M3 -->|No| M5[先略過 AP 與服務啟動]
   M4 --> M6[若有保存 STA 則嘗試連線]
@@ -20,8 +20,8 @@ flowchart TD
   M11 --> M12[進入主迴圈]
   M12 --> M13[poll_cmd_server]
   M13 --> M14[poll_http_server]
-  M14 --> M15[poll_modbus_tcp_server]
-  M15 --> M16[poller.tick]
+  M14 --> M15[Modbus TCP 請求處理程序]
+  M15 --> M16[定時輪詢調度引擎]
   M16 --> M17[sleep 20ms]
   M17 --> M12
 
@@ -31,7 +31,7 @@ flowchart TD
   H1[HTTP poll] --> H2{accept client?}
   H2 -->|No| H3[return]
   H2 -->|Yes| H4[讀 Header Body 並解析 method path]
-  H4 --> H5{路由}
+  H4 --> H5{請求分流判定}
   H5 -->|GET /| H6[回 Web UI]
   H5 -->|GET /wifi/scan| H7[掃描 AP 清單 JSON]
   H5 -->|GET /wifi/status| H8[回 STA AP 電源資訊 JSON]
@@ -71,7 +71,7 @@ flowchart TD
   B5 --> B6{封包可解析?}
   B6 -->|No| B7[結束連線]
   B6 -->|Yes| B8[讀 modbus config timeout tcp_slave_id]
-  B8 --> B9{Unit ID == tcp_slave_id ?}
+  B8 --> B9{識別碼比對（本地/路由）}
   B9 -->|Yes| B10{Func 03/04 且範圍合法?}
   B10 -->|Yes| B11[回本地 registers]
   B10 -->|No| B12[回 exception 0x01 或 0x02]
@@ -96,7 +96,7 @@ flowchart TD
   %% ========================
   %% Poller
   %% ========================
-  P1[poller.tick] --> P2[讀 poller config]
+  P1[定時輪詢調度引擎] --> P2[讀 poller config]
   P2 --> P3{enabled 或 force_enabled?}
   P3 -->|No| P4[return]
   P3 -->|Yes| P5{到達 interval?}

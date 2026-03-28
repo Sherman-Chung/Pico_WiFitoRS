@@ -1,5 +1,9 @@
 # Pico_UPS.py - 將 INA219 量測與電池百分比計算封裝在此，使用時僅需匯入本模組
 # 內含簡化版 INA219 驅動（參考 pico-UPS-B 範例），預設嘗試位址 0x43/0x40。
+#
+# 維護導讀：
+# - read_battery() 是外部主要入口；若調整取樣週期看 _CACHE_MS。
+# - 若電量估算曲線需調整，修改 _PCT_POINTS。
 
 import time
 from machine import I2C
@@ -53,6 +57,9 @@ class Mode:
 class INA219:
     """簡化版 INA219 驅動，預設配置 32V/2A。"""
 
+    # =============== INA219 建構子 ===============
+    # 說明：
+    # 建立 I2C 與 INA219 物件，並套用 32V/2A 預設校正。
     def __init__(self, i2c_bus=1, addr=0x40):
         self.i2c = I2C(i2c_bus)
         self.addr = addr
@@ -61,16 +68,25 @@ class INA219:
         self._power_lsb = 0
         self.set_calibration_32V_2A()
 
+    # =============== INA219 暫存器讀取 ===============
+    # 說明：
+    # 從指定暫存器讀 2 bytes 並回傳整數值。
     def read(self, address):
         data = self.i2c.readfrom_mem(self.addr, address, 2)
         return (data[0] * 256) + data[1]
 
+    # =============== INA219 暫存器寫入 ===============
+    # 說明：
+    # 將 16-bit 值寫入指定暫存器。
     def write(self, address, data):
         temp = bytearray(2)
         temp[1] = data & 0xFF
         temp[0] = (data & 0xFF00) >> 8
         self.i2c.writeto_mem(self.addr, address, temp)
 
+    # =============== INA219 校正配置 ===============
+    # 說明：
+    # 設定 32V/2A 量測模式與 ADC 取樣參數。
     def set_calibration_32V_2A(self):
         """配置 32V / 2A 量測；取樣次數調低以縮短轉換時間。"""
         self._current_lsb = 1  # 100uA/bit
@@ -93,16 +109,25 @@ class INA219:
         )
         self.write(_REG_CONFIG, self.config)
 
+    # =============== 分流電壓讀取 ===============
+    # 說明：
+    # 讀取 shunt 電壓（mV）。
     def getShuntVoltage_mV(self):
         value = self.read(_REG_SHUNTVOLTAGE)
         if value > 32767:
             value -= 65535
         return value * 0.01
 
+    # =============== 母線電壓讀取 ===============
+    # 說明：
+    # 讀取 bus 電壓（V）。
     def getBusVoltage_V(self):
         self.read(_REG_BUSVOLTAGE)
         return (self.read(_REG_BUSVOLTAGE) >> 3) * 0.004
 
+    # =============== 電流讀取 ===============
+    # 說明：
+    # 讀取電流（mA）。
     def getCurrent_mA(self):
         value = self.read(_REG_CURRENT)
         if value > 32767:
@@ -120,6 +145,9 @@ _available = True  # 檢測模組是否存在；初始化失敗則關閉電量�
 _CURRENT_THRESHOLD_A = 0.01  # 判斷供電來源的電流門檻（A）
 
 
+# =============== INA219 初始化 ===============
+# 說明：
+# 依序嘗試常見 I2C 位址（0x43/0x40）建立 INA219 實例。
 def _init_ina219():
     """嘗試初始化 INA219（地址 0x43 -> 0x40），成功回實例，失敗回 None。"""
     global _ina219, _available
@@ -139,6 +167,9 @@ def _init_ina219():
     return None
 
 
+# =============== 電池資訊讀取 ===============
+# 說明：
+# 讀取電壓/電流並估算電量百分比，含快取與錯誤保護。
 def read_battery(force: bool = False):
     """讀取電池電壓/電流與粗估百分比；失敗時回最後成功值或 None。"""
     global _batt_cache, _batt_last_ms, _batt_err, _batt_printed, _available
@@ -172,6 +203,9 @@ def read_battery(force: bool = False):
         return _batt_cache
 
 
+# =============== 電量文字格式化 ===============
+# 說明：
+# 回傳目前電量百分比文字（例如 78%）。
 def battery_gauge_text():
     """回傳電量百分比文字，供抬頭列顯示。"""
     batt = _batt_cache or read_battery()
@@ -180,6 +214,9 @@ def battery_gauge_text():
     return f"{batt['p']:.0f}%"
 
 
+# =============== 電池週期更新 ===============
+# 說明：
+# 主迴圈定期呼叫，避免過於頻繁 I2C 讀取。
 def tick_battery(force: bool = False):
     """在主迴圈週期呼叫，預設 2 秒更新一次以降低卡頓。"""
     now = time.ticks_ms()
@@ -188,11 +225,17 @@ def tick_battery(force: bool = False):
     read_battery()
 
 
+# =============== 電池錯誤查詢 ===============
+# 說明：
+# 取得最近一次電池讀取錯誤訊息。
 def last_battery_error():
     """取得最近的讀取錯誤字串（若有）。"""
     return _batt_err
 
 
+# =============== 供電來源推測 ===============
+# 說明：
+# 依電流方向與門檻，推測 external/battery/idle。
 def power_source_text():
     """依電流方向推測供電來源（外部/電池/待機），僅供提示用。"""
     batt = _batt_cache or read_battery()

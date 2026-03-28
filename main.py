@@ -1,5 +1,10 @@
 # main.py — Pico 2 W Gateway（UPS + RS485）
 # 保留 AP/STA + Web + Modbus TCP + 輪詢表格，移除 LCD/按鍵 UI。
+#
+# 維護導讀：
+# 1) 若要調整「開機順序 / 服務啟動時機」，主要看 main() 前半段。
+# 2) 若要調整「主迴圈排程順序」，主要看 while True 區塊。
+# 3) 若要新增新的常駐服務，建議放在 start_network_services() 並在主迴圈輪詢。
 
 import time
 import machine
@@ -7,6 +12,7 @@ import machine
 try:
     from config import AUTO_CONFIG_AP_ON_BOOT
 except ImportError:
+    # 若缺少 config.py，採安全預設：先開 AP，確保可進設定頁
     AUTO_CONFIG_AP_ON_BOOT = True
 
 from Server_CMD import start_cmd_server, poll_cmd_server
@@ -24,8 +30,12 @@ from poller import tick as poller_tick
 
 
 # =============== 網路服務啟動 ===============
+# 說明：
+# 負責啟動三個對外服務：
+# 1) Modbus TCP（資料平面）
+# 2) CMD TCP（維運指令）
+# 3) HTTP（Web UI + API）
 def start_network_services():
-    """Wi-Fi 連上後開啟 TCP 與 HTTP 服務。"""
     try:
         cfg = get_config()
         mb_port = int((cfg.get("modbus") or {}).get("tcp_port") or 502)
@@ -37,8 +47,10 @@ def start_network_services():
 
 
 # =============== 致命錯誤處理 ===============
+# 說明：
+# 當開機檢查發現不可忽略的錯誤時，系統不再進入主迴圈，
+# 透過 LED 持續閃爍提示「裝置需要人工處理」。
 def fail_halt(reason: str):
-    """檢查失敗時停機並閃 LED 提示。"""
     print("FATAL:", reason)
     try:
         led = machine.Pin("LED", machine.Pin.OUT)
@@ -54,6 +66,11 @@ def fail_halt(reason: str):
 
 
 # =============== 系統檢查（開機一次） ===============
+# 說明：
+# 在系統進入正式服務前，先驗證關鍵硬體是否可用：
+# - UPS/INA219 讀值是否正常
+# - 已啟用的 RS485 通道是否可初始化
+# 任一檢查失敗都會進入 fail_halt()。
 def run_system_checks():
     """在進入主迴圈前檢查模組狀態（UPS/RS485），失敗則停機閃燈。"""
     print("=== System checks ===")
@@ -103,6 +120,12 @@ def run_system_checks():
 
 
 # =============== 主狀態機 ===============
+# 說明：
+# 系統總控流程：
+# 1) 依設定決定先啟 AP/服務
+# 2) 嘗試 STA 連線
+# 3) 執行一次硬體檢查
+# 4) 進入主迴圈固定輪詢各服務
 def main():
     services_started = False
     ap_started = False
@@ -110,35 +133,46 @@ def main():
     # main() 以 while 迴圈維持：1) 開啟 AP + Captive Portal 便於設定
     # 2) 持續輪詢 TCP/HTTP 伺服器與輪詢表格
 
+    # --------------- 內部函式：mDNS 啟動守門 ---------------
+    # 說明：
+    # 避免重複啟動 mDNS（重複綁定 5353 會失敗）。
+    # 由於 AP/STA IP 可能改變，透過 ip_getter 動態回報目前 IP。
     def maybe_start_mdns():
+        """mDNS 僅啟動一次，避免重複綁定 5353。"""
         nonlocal mdns
         if mdns is not None:
             return
         try:
+            # --------------- 內部函式：取得目前對外 IP ---------------
+            # 說明：
+            # mDNS 回覆時即時抓 wlan.ifconfig()[0]，避免 IP 變更後回舊位址。
             def _get_ip():
                 try:
                     return wlan.ifconfig()[0]
                 except Exception:
                     return "0.0.0.0"
-
+            # 這裡啟動 mDNS，hostname 固定 "pico"，IP 由 _get_ip 動態提供
             mdns = MDNSResponder(hostname="pico", ip_getter=_get_ip)
             mdns.start()
         except Exception as e:
             print("mDNS start failed:", e)
 
+    # 讀取可保存設定（AP/STA/Modbus/Poller）
     cfg = get_config()
     ap_cfg = cfg.get("ap") or {}
     ap_ssid = ap_cfg.get("ssid") or "PicoSetup"
     ap_pwd = ap_cfg.get("password") or "pico1234"
 
+    # 根據 AUTO_CONFIG_AP_ON_BOOT 決定開機是否先啟 AP
     if AUTO_CONFIG_AP_ON_BOOT:
-        # 預設開啟設定用 AP 以便手機立即連線；timeout 交由 wait_for_station 控制
+        # 若設定要求開機先啟 AP，則立即啟動，讓使用者可直接連 AP 進行 Wi-Fi 設定
         ap_started = start_config_ap(ap_ssid, ap_pwd)
         if ap_started:
             print("Config AP active:", ap_ssid)
             print("Open http://192.168.4.1 to configure Wi-Fi")
         else:
             print("Config AP failed to start")
+        # 先啟服務（包含 mDNS），確保設定頁可用
         start_network_services()
         services_started = True
         maybe_start_mdns()
@@ -146,6 +180,7 @@ def main():
     sta_cfg = cfg.get("sta") or {}
     sta_ssid = sta_cfg.get("ssid") or ""
     sta_pwd = sta_cfg.get("password") or ""
+    # 若有保存 STA，嘗試背景接入既有 Wi-Fi
     if sta_ssid and not wlan.isconnected():
         print("Trying saved STA:", sta_ssid)
         try:
@@ -156,6 +191,7 @@ def main():
     # 進入主迴圈前先做一次模組檢查（失敗會停機閃燈）
     run_system_checks()
 
+    # 保底：若前面未啟 AP，這裡補啟，確保仍可透過 AP 進設定頁
     if not ap_started:
         # 若未開 AP，補開一組，方便用 Web UI 配置
         ap_started = start_config_ap(ap_ssid, ap_pwd)
@@ -163,17 +199,22 @@ def main():
             print("Connect to AP", ap_ssid, "then open http://192.168.4.1")
         else:
             print("Config AP failed to start")
+    # 保底：若前面未啟服務，這裡補啟
     if not services_started:
         start_network_services()
         services_started = True
         maybe_start_mdns()
 
     while True:
-        # Headless 模式：輪詢網路服務與輪詢表格
+        # 主迴圈順序原則：
+        # 1) 先處理人機介面命令（CMD/HTTP）
+        # 2) 再處理 Modbus gateway
+        # 3) 最後做一次 Poller tick
         poll_cmd_server()
         poll_http_server()
         poll_modbus_tcp_server()
         poller_tick()
+        # 小睡避免 CPU 忙等，20ms 約等同 50Hz 排程節奏
         time.sleep_ms(20)
 
 

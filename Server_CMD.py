@@ -1,5 +1,10 @@
 # Server_CMD.py - 遠端指令解析與 TCP 伺服器
 # handle_cmd 專責解析指令；start/poll 管理非阻塞 TCP 伺服器。
+#
+# 維護導讀：
+# - 此模組提供「文字命令入口」，主要用於維運與測試。
+# - 真正的 Modbus Gateway 資料平面在 modbus_gateway.py，不走 MB 子命令。
+# - poll_cmd_server() 目前是「一連線一命令」模型，不維持長連線。
 
 import socket
 import time
@@ -13,8 +18,11 @@ SERVER_PORT = 12345  # 可依需求調整
 server_sock = None
 
 
+# =============== Hex Token 解析 ===============
+# 說明：
+# 將命令列中的 hex token 轉成 bytes（支援 0x 前綴）。
 def _parse_hex_bytes(tokens) -> bytes:
-    """Parse list of hex string tokens into bytes (e.g., '06', '0x06')."""
+    """將多個 hex token 轉為 bytes（例如 06 / 0x06）。"""
     out = bytearray()
     for t in tokens:
         if not t:
@@ -27,8 +35,19 @@ def _parse_hex_bytes(tokens) -> bytes:
     return bytes(out)
 
 
+# =============== 指令主解析器 ===============
+# 說明：
+# 解析並執行 SYS/LED/MB/RS 指令，回傳文字結果。
 def handle_cmd(cmd: str) -> str:
-    """核心指令解析：SYS / MB 兩大類，保留原本行為並加上中文註解。"""
+    """
+    核心命令解析入口。
+
+    命令大類：
+    - SYS: 系統與 Wi-Fi/AP 維運
+    - LED: 板載 LED 控制
+    - MB : 示範用回覆（非主資料路徑）
+    - RS : RS485 原始收發測試
+    """
     cmd = cmd.strip()
     if not cmd:
         return "ERR EMPTY"
@@ -154,7 +173,7 @@ def handle_cmd(cmd: str) -> str:
             except Exception as e:
                 return "ERR RS SEND " + str(e)[:60]
 
-        # RS HEX <ch> <hex bytes...>  (8 bytes, send as-is)
+        # RS HEX <ch> <hex bytes...>（限定 8 bytes，直接發送）
         elif sub == "HEX":
             if len(args) < 3:
                 return "ERR RS HEX ARG"
@@ -240,6 +259,9 @@ def handle_cmd(cmd: str) -> str:
         return "ERR UNKNOWN CMD: " + cmd
 
 
+# =============== 指令 TCP 伺服器啟動 ===============
+# 說明：
+# 建立非阻塞監聽 socket（port 12345），供主迴圈輪詢。
 def start_cmd_server():
     """啟動非阻塞 TCP 伺服器（12345），失敗時會丟出例外便於偵錯。"""
     global server_sock
@@ -253,8 +275,11 @@ def start_cmd_server():
     print("start_cmd_server: listening on", addr)
 
 
+# =============== 指令 TCP 輪詢處理 ===============
+# 說明：
+# 接受一個 client，處理一筆命令並回覆後關閉連線。
 def poll_cmd_server():
-    """非阻塞檢查是否有遠端連線，有的話收一筆指令並回覆。"""
+    """非阻塞檢查連線；收到後執行一筆命令並關閉連線。"""
     global server_sock
     if server_sock is None:
         return

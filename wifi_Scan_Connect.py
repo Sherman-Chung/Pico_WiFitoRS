@@ -1,5 +1,9 @@
 # wifi_Scan_Connect.py - Wi-Fi 掃描與連線管理
 # 集中處理 WLAN 初始化、掃描結果整理與連線流程，方便 UI 直接呼叫。
+#
+# 維護導讀：
+# - 若要改 AP/STA 共存策略，優先看 _dns_target_ip() 與 start_config_ap()。
+# - 若要改連線等待行為，優先看 CONNECT_TIMEOUT_MS 與 connect_to_ap()。
 
 import time
 import network
@@ -27,6 +31,9 @@ _last_stations = []
 _captive_dns = None
 
 
+# =============== DNS 目標 IP 判定 ===============
+# 說明：
+# 決定 Captive DNS 應回覆的 IP（優先 AP，其次 STA）。
 def _dns_target_ip():
     """DNS 回應用 IP：若有裝置連在內建 AP，強制回 AP IP，否則回 STA IP。"""
     # 只要還有人連著 PicoSetup，就讓 www.pico.pi.com 保持在 192.168.4.1，
@@ -47,6 +54,9 @@ def _dns_target_ip():
     return "192.168.4.1"
 
 
+# =============== Captive DNS 啟動保證 ===============
+# 說明：
+# 確保 Captive DNS 實例存在且已啟動。
 def _ensure_captive_dns():
     """啟動 DNS 假門牌（AP/STA 共用），讓 www.pico.pi.com 之類的名稱指向目前 IP。"""
     global _captive_dns
@@ -60,6 +70,9 @@ def _ensure_captive_dns():
         print("Captive DNS start failed:", e)
 
 
+# =============== 可見 AP 掃描 ===============
+# 說明：
+# 掃描並回傳可見 AP，依 RSSI 由強到弱排序。
 def scan_visible():
     """掃描 AP 並回傳已排序的可見清單（忽略空白 SSID）。"""
     raw = wlan.scan()
@@ -73,6 +86,9 @@ def scan_visible():
     return filtered
 
 
+# =============== STA 連線 ===============
+# 說明：
+# 以指定 SSID/密碼嘗試連線，於 timeout 內回報成功或失敗。
 def connect_to_ap(ssid: str, psk: str, timeout_ms: int = CONNECT_TIMEOUT_MS) -> bool:
     """嘗試連線指定 AP，成功回 True，失敗回 False。"""
     _ensure_captive_dns()
@@ -92,6 +108,9 @@ def connect_to_ap(ssid: str, psk: str, timeout_ms: int = CONNECT_TIMEOUT_MS) -> 
     return wlan.isconnected()
 
 
+# =============== Wi-Fi 狀態讀取 ===============
+# 說明：
+# 回傳 STA/AP 狀態資訊供 Web UI 顯示。
 def read_status():
     """取得連線狀態資訊，方便 UI 顯示。"""
     info = {
@@ -115,6 +134,9 @@ def read_status():
     return info
 
 
+# =============== 設定 AP 啟動 ===============
+# 說明：
+# 啟動內建 AP 作為設定入口，並同步確保 Captive DNS 啟動。
 def start_config_ap(essid: str = "PicoSetup", password: str = "") -> bool:
     """啟動內建 AP 方便手機連線設定，失敗回 False。"""
     global _ap_enabled, _ap_config, _captive_dns
@@ -137,6 +159,9 @@ def start_config_ap(essid: str = "PicoSetup", password: str = "") -> bool:
         return False
 
 
+# =============== 設定 AP 停止 ===============
+# 說明：
+# 關閉內建 AP，更新本地狀態旗標。
 def stop_config_ap() -> None:
     """關閉內建 AP。"""
     global _ap_enabled
@@ -147,6 +172,9 @@ def stop_config_ap() -> None:
     _ap_enabled = False
 
 
+# =============== 設定 AP 重啟 ===============
+# 說明：
+# 使用目前保存的 AP 參數，先停後啟。
 def restart_config_ap() -> bool:
     """重新啟動內建 AP（使用上次設定）。"""
     cfg = _ap_config or {"essid": "PicoSetup", "password": ""}
@@ -155,6 +183,9 @@ def restart_config_ap() -> bool:
     return start_config_ap(cfg.get("essid", "PicoSetup"), cfg.get("password", ""))
 
 
+# =============== AP 設定套用 ===============
+# 說明：
+# 更新 AP 參數，並可選擇是否立即重啟 AP 生效。
 def apply_ap_config(essid: str, password: str, restart: bool = True) -> bool:
     """更新 AP 設定並選擇是否立即重啟。"""
     global _ap_config
@@ -166,6 +197,9 @@ def apply_ap_config(essid: str, password: str, restart: bool = True) -> bool:
     return True
 
 
+# =============== Wi-Fi 子系統重置 ===============
+# 說明：
+# 重建 STA 狀態並視情況重啟 AP，常用於網路異常恢復。
 def reset_wifi() -> bool:
     """重新初始化 Wi-Fi（STA/AP），避免驅動狀態異常。"""
     global _ap_enabled
@@ -185,6 +219,9 @@ def reset_wifi() -> bool:
     return True
 
 
+# =============== AP 連線數查詢 ===============
+# 說明：
+# 回傳目前連到 AP 的 station 數量。
 def ap_station_count() -> int:
     """回傳目前連上的 STA 數量（AP mode）。"""
     global _last_stations
@@ -201,6 +238,9 @@ def ap_station_count() -> int:
         return 0
 
 
+# =============== 等待 AP 有裝置連線 ===============
+# 說明：
+# 迴圈等待 station 數量達門檻，可指定 timeout。
 def wait_for_station(min_count: int = 1, timeout_ms=None, poll_ms: int = 500) -> bool:
     """等待有裝置連上 AP；預設不超時。"""
     t0 = time.ticks_ms()

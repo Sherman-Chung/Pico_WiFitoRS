@@ -14,6 +14,11 @@
 # - reg: 2 bytes Hex（起始位址）
 # - data: 2 bytes Hex（寫入值；03/04 代表讀取數量）
 # - Return: 由系統回填（非儲存欄位）
+#
+# 維護導讀：
+# - tick() 是主入口；若要改排程節奏或錯誤策略，從這裡開始看。
+# - _update_registers() 決定「回覆如何寫入本地 registers」。
+# - status()/set_enabled() 是 Web API 對接點。
 
 import time
 
@@ -31,6 +36,9 @@ _last_comm = {"ch": 0, "tx": "", "rx": "", "rx_len": 0, "err": "", "ts": 0}  # �
 _force_enabled = None  # Web start/stop 強制覆蓋設定
 
 
+# =============== CRC16 計算 ===============
+# 說明：
+# 計算 Modbus RTU 所需 CRC16 校驗值。
 def _crc16(data: bytes) -> int:
     """Modbus RTU CRC-16 (poly 0xA001)."""
     crc = 0xFFFF
@@ -44,6 +52,9 @@ def _crc16(data: bytes) -> int:
     return crc & 0xFFFF
 
 
+# =============== LRC 計算 ===============
+# 說明：
+# 計算 Modbus ASCII 所需 LRC 校驗值。
 def _lrc(data: bytes) -> int:
     """Modbus ASCII LRC."""
     lrc = 0
@@ -53,6 +64,9 @@ def _lrc(data: bytes) -> int:
     return lrc
 
 
+# =============== RTU 封包組建 ===============
+# 說明：
+# 將 Unit ID + PDU 組成 RTU frame 並附加 CRC。
 def _build_rtu_frame(unit_id: int, pdu: bytes) -> bytes:
     """組成 RTU frame: Unit ID + PDU + CRC."""
     base = bytes([unit_id]) + pdu
@@ -60,6 +74,9 @@ def _build_rtu_frame(unit_id: int, pdu: bytes) -> bytes:
     return base + bytes([crc & 0xFF, (crc >> 8) & 0xFF])
 
 
+# =============== RTU 封包解析 ===============
+# 說明：
+# 驗證 RTU CRC，成功回傳 (unit_id, pdu)。
 def _parse_rtu_frame(frame: bytes):
     """解析單一 RTU frame，驗證 CRC 後回傳 (unit_id, pdu)。"""
     if len(frame) < 5:
@@ -71,6 +88,9 @@ def _parse_rtu_frame(frame: bytes):
     return body[0], body[1:]
 
 
+# =============== RTU 回覆搜尋 ===============
+# 說明：
+# 當 raw 含雜訊或拼接資料時，嘗試找出可通過 CRC 的有效 frame。
 def _find_rtu_frame(raw: bytes):
     """在含雜訊/拼接的 raw 中尋找可通過 CRC 的 RTU frame。"""
     n = len(raw)
@@ -85,6 +105,9 @@ def _find_rtu_frame(raw: bytes):
     return None, None
 
 
+# =============== ASCII 封包組建 ===============
+# 說明：
+# 將 Unit ID + PDU 組成 ASCII frame 並附加 LRC。
 def _build_ascii_frame(unit_id: int, pdu: bytes) -> bytes:
     """組成 ASCII frame: :HEX + LRC + CRLF."""
     base = bytes([unit_id]) + pdu
@@ -93,6 +116,9 @@ def _build_ascii_frame(unit_id: int, pdu: bytes) -> bytes:
     return (":" + hex_txt + "\r\n").encode()
 
 
+# =============== ASCII 封包解析 ===============
+# 說明：
+# 驗證 ASCII 格式與 LRC，成功回傳 (unit_id, pdu)。
 def _parse_ascii_frame(frame: bytes):
     """解析 ASCII frame，驗證 LRC 後回傳 (unit_id, pdu)。"""
     try:
@@ -117,6 +143,9 @@ def _parse_ascii_frame(frame: bytes):
     return data[0], data[1:]
 
 
+# =============== RTU 回覆讀取 ===============
+# 說明：
+# 依 baudrate 推算 idle 間隔，在 timeout 內收集 RTU 回覆。
 def _read_rtu_response(ch: int, timeout_ms: int, baudrate: int) -> bytes:
     """依 baudrate 計算閒置間隔，收集 RTU 回覆直到 idle 或 timeout。"""
     buf = bytearray()
@@ -136,6 +165,9 @@ def _read_rtu_response(ch: int, timeout_ms: int, baudrate: int) -> bytes:
     return bytes(buf)
 
 
+# =============== ASCII 回覆讀取 ===============
+# 說明：
+# 持續讀取直到遇到換行或 timeout。
 def _read_ascii_response(ch: int, timeout_ms: int) -> bytes:
     """讀取直到遇到 '\\n' 或 timeout。"""
     buf = bytearray()
@@ -151,6 +183,9 @@ def _read_ascii_response(ch: int, timeout_ms: int) -> bytes:
     return bytes(buf)
 
 
+# =============== Hex 字串轉整數 ===============
+# 說明：
+# 將欄位輸入（可含 0x 前綴）轉為整數。
 def _hex_to_int(val: str) -> int:
     """將 Hex 字串轉成 int，允許 0x 前綴。"""
     val = (val or "").strip()
@@ -159,11 +194,17 @@ def _hex_to_int(val: str) -> int:
     return int(val, 16) if val else 0
 
 
+# =============== HEX 顯示格式化 ===============
+# 說明：
+# 將 bytes 轉為空白分隔 HEX 字串，供 UI/Log 顯示。
 def _format_hex_bytes(data: bytes) -> str:
     """輸出 HEX 字串，用於 UI/Log 顯示。"""
     return " ".join("%02X" % b for b in data)
 
 
+# =============== Return 欄位解析 ===============
+# 說明：
+# 依功能碼把回覆 PDU 轉成使用者可讀字串。
 def _parse_return(cmd: int, pdu: bytes):
     """依功能碼解析回覆資料，回傳顯示用字串。"""
     if not pdu:
@@ -185,6 +226,9 @@ def _parse_return(cmd: int, pdu: bytes):
     return _format_hex_bytes(pdu[1:])
 
 
+# =============== 本地 Registers 回填 ===============
+# 說明：
+# 將輪詢回覆資料寫入本地 0-255 registers（以列索引為基準）。
 def _update_registers(cmd: int, pdu: bytes, row_index: int, row_data: int):
     """將回覆資料寫入本地 0-255 registers（以表格列 index 為基準）。"""
     if not pdu:
@@ -217,6 +261,9 @@ def _update_registers(cmd: int, pdu: bytes, row_index: int, row_data: int):
     # 其他功能碼不更新
 
 
+# =============== Return 陣列長度同步 ===============
+# 說明：
+# 確保結果陣列長度與輪詢列數一致，避免索引錯位。
 def _ensure_results_size(n: int):
     """確保 Return 列數與輪詢表格列數一致。"""
     global _results
@@ -224,6 +271,9 @@ def _ensure_results_size(n: int):
         _results = [""] * n
 
 
+# =============== 輪詢主引擎 ===============
+# 說明：
+# 每次主迴圈呼叫一次；條件成立時僅執行一列輪詢，並更新 Return 與 registers。
 def tick():
     """每次主迴圈呼叫一次，依 interval 送出一列輪詢資料。"""
     global _last_enabled, _last_tick, _idx
@@ -355,6 +405,9 @@ def tick():
         lock_release(ch)
 
 
+# =============== 輪詢狀態查詢 ===============
+# 說明：
+# 提供 Web API 讀取目前輪詢狀態、結果與最近通訊資訊。
 def status():
     """提供 Web UI 查詢：狀態、回覆、最近一次通訊。"""
     cfg = get_config()
@@ -369,6 +422,9 @@ def status():
     }
 
 
+# =============== 輪詢啟停控制 ===============
+# 說明：
+# 由 Web API 強制啟用/停用輪詢，並重置索引與時間基準。
 def set_enabled(enabled: bool) -> None:
     """立即啟停輪詢並重置索引與計時。"""
     global _force_enabled, _last_enabled, _last_tick, _idx

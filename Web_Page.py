@@ -1,5 +1,10 @@
 # Web_Page.py - 提供內建 Web UI 與簡易 HTTP 伺服器
 # HTTP 伺服器會回傳內嵌的控制頁面，並透過 POST /cmd 呼叫指令處理器。
+#
+# 維護導讀：
+# - 前半段 WEB_PAGE 為前端頁面字串，修改 UI 主要在此區。
+# - 後半段 poll_http_server() 為 API 路由核心，修改後端行為看這裡。
+# - 新增 API 時：在前端 fetch 與後端 route 分支同步加上。
 
 import socket
 import json
@@ -1037,6 +1042,9 @@ WEB_PAGE = """<!DOCTYPE html>
 """
 
 
+# =============== HTTP 伺服器啟動 ===============
+# 說明：
+# 建立非阻塞 HTTP 監聽 socket，並注入命令處理器供 /cmd 使用。
 def start_http_server(cmd_handler=default_handler):
     """啟動非阻塞 HTTP 伺服器，預設使用 Server_CMD.handle_cmd。"""
     global http_sock, _cmd_handler
@@ -1051,6 +1059,9 @@ def start_http_server(cmd_handler=default_handler):
     print("HTTP server listening on", addr)
 
 
+# =============== HTTP 輪詢處理 ===============
+# 說明：
+# 主迴圈呼叫的 HTTP 入口；負責接收連線、解析請求、路由分發與回應。
 def poll_http_server():
     """非阻塞 HTTP：GET / 回頁面；POST /cmd 交由指令處理器。"""
     global http_sock
@@ -1064,6 +1075,9 @@ def poll_http_server():
     if not cl:
         return
 
+    # --------------- 內部函式：完整送出回應 ---------------
+    # 說明：
+    # 逐段送出資料直到完成，避免網頁在低速網路下出現部分內容缺漏。
     def send_all(buf: bytes):
         """確保資料送出完畢，避免部分瀏覽器顯示空白；分段重送直到全部送出或出錯。"""
         mv = memoryview(buf)
@@ -1143,6 +1157,9 @@ def poll_http_server():
                 body += chunk
                 need -= len(chunk)
 
+        # --------------- 內部函式：JSON 回應封裝 ---------------
+        # 說明：
+        # 統一 JSON 回應格式與 HTTP 標頭，減少重複程式碼。
         def send_json(obj, status="200 OK"):
             body_bytes = json.dumps(obj).encode("utf-8")
             resp = (
