@@ -23,17 +23,18 @@
 import time
 
 import Pico_RS485 as rs485
-from config_store import get_config
+from config_store import get_config, get_response_timeout_ms
 from rs485_lock import acquire as lock_acquire, release as lock_release
 from register_store import set_reg, set_regs
 
 # 輪詢狀態
 _last_enabled = None  # 記錄上次 enabled 狀態，狀態切換時重置索引
-_last_tick = 0  # 上次送出時間
+_next_due_ms = 0  # 下一次允許送出的時間點（以本筆完成時間 + interval 計算）
 _idx = 0  # 目前輪到的表格列
 _results = []  # 每列的 Return 顯示值
 _last_comm = {"ch": 0, "tx": "", "rx": "", "rx_len": 0, "err": "", "ts": 0}  # 最近一次 RS485 通訊資訊
 _force_enabled = None  # Web start/stop 強制覆蓋設定
+_last_elapsed_ms = 0  # 最近一筆輪詢實際耗時（含 timeout 等待）
 
 
 # =============== CRC16 計算 ===============
@@ -276,7 +277,7 @@ def _ensure_results_size(n: int):
 # 每次主迴圈呼叫一次；條件成立時僅執行一列輪詢，並更新 Return 與 registers。
 def tick():
     """每次主迴圈呼叫一次，依 interval 送出一列輪詢資料。"""
-    global _last_enabled, _last_tick, _idx
+    global _last_enabled, _next_due_ms, _idx, _last_elapsed_ms
     cfg = get_config()
     poller = cfg.get("poller") or {}
     enabled = bool(poller.get("enabled"))
@@ -287,7 +288,7 @@ def tick():
         _last_enabled = enabled
     if enabled != _last_enabled:
         _last_enabled = enabled
-        _last_tick = 0
+        _next_due_ms = 0
         _idx = 0
 
     if not enabled:
@@ -305,15 +306,18 @@ def tick():
         return
 
     now = time.ticks_ms()
-    if _last_tick and time.ticks_diff(now, _last_tick) < interval_ms:
+    if _next_due_ms and time.ticks_diff(now, _next_due_ms) < 0:
         return
-    _last_tick = now
 
     if _idx >= len(rows):
         _idx = 0
 
-    row = rows[_idx]
+    row_index = _idx
+    row = rows[row_index]
     _idx += 1
+    timeout_ms = get_response_timeout_ms(cfg)
+    started_ms = time.ticks_ms()
+    lock_held = False
 
     try:
         ch = int(row.get("ch"))
@@ -322,87 +326,90 @@ def tick():
         reg = _hex_to_int(row.get("reg"))
         data = _hex_to_int(row.get("data"))
     except Exception:
-        _results[_idx - 1] = "BAD ROW"
-        return
-
-    if not lock_acquire(ch):
-        # RS485 半雙工，同通道不可同時收發
-        _results[_idx - 1] = "BUSY"
-        return
-
-    try:
-        modbus_cfg = cfg.get("modbus") or {}
-        # 通道未啟用就直接回報
-        ch0_enabled = bool(modbus_cfg.get("ch0_enabled", True))
-        ch1_enabled = bool(modbus_cfg.get("ch1_enabled", True))
-        if (ch == 0 and not ch0_enabled) or (ch == 1 and not ch1_enabled):
-            _results[_idx - 1] = "DISABLED"
-            return
-        ch_cfg = (modbus_cfg.get("ch0") if ch == 0 else modbus_cfg.get("ch1")) or {}
-        mode = (ch_cfg.get("mode") or "rtu").lower()
-        baudrate = int(ch_cfg.get("baudrate") or 9600)
-        rs485.init(
-            ch,
-            baudrate=baudrate,
-            parity=ch_cfg.get("parity") or "N",
-            stopbits=int(ch_cfg.get("stopbits") or 1),
-            bits=int(ch_cfg.get("bits") or 8),
-        )
-        pdu = bytes(
-            [
-                cmd & 0xFF,
-                (reg >> 8) & 0xFF,
-                reg & 0xFF,
-                (data >> 8) & 0xFF,
-                data & 0xFF,
-            ]
-        )
-        timeout_ms = int((modbus_cfg.get("response_timeout_ms") or 1200))
-        rs485.flush_input(ch)
-        # 依 RTU/ASCII 組包送出
-        if mode == "ascii":
-            frame = _build_ascii_frame(station, pdu)
-            rs485.send(ch, frame)
-            tx_time_ms = int((len(frame) * 11 * 1000) / max(1, baudrate)) + 2
-            time.sleep_ms(tx_time_ms)
-            raw = _read_ascii_response(ch, timeout_ms)
-            resp_unit, resp_pdu = _parse_ascii_frame(raw)
+        _results[row_index] = "BAD ROW"
+    else:
+        if not lock_acquire(ch):
+            # RS485 半雙工，同通道不可同時收發
+            _results[row_index] = "BUSY"
         else:
-            frame = _build_rtu_frame(station, pdu)
-            rs485.send(ch, frame)
-            tx_time_ms = int((len(frame) * 11 * 1000) / max(1, baudrate)) + 2
-            time.sleep_ms(tx_time_ms)
-            raw = _read_rtu_response(ch, timeout_ms, baudrate)
-            resp_unit, resp_pdu = _parse_rtu_frame(raw)
+            lock_held = True
+            try:
+                modbus_cfg = cfg.get("modbus") or {}
+                # 通道未啟用就直接回報
+                ch0_enabled = bool(modbus_cfg.get("ch0_enabled", True))
+                ch1_enabled = bool(modbus_cfg.get("ch1_enabled", True))
+                if (ch == 0 and not ch0_enabled) or (ch == 1 and not ch1_enabled):
+                    _results[row_index] = "DISABLED"
+                    return
+                ch_cfg = (modbus_cfg.get("ch0") if ch == 0 else modbus_cfg.get("ch1")) or {}
+                mode = (ch_cfg.get("mode") or "rtu").lower()
+                baudrate = int(ch_cfg.get("baudrate") or 9600)
+                rs485.init(
+                    ch,
+                    baudrate=baudrate,
+                    parity=ch_cfg.get("parity") or "N",
+                    stopbits=int(ch_cfg.get("stopbits") or 1),
+                    bits=int(ch_cfg.get("bits") or 8),
+                )
+                pdu = bytes(
+                    [
+                        cmd & 0xFF,
+                        (reg >> 8) & 0xFF,
+                        reg & 0xFF,
+                        (data >> 8) & 0xFF,
+                        data & 0xFF,
+                    ]
+                )
+                rs485.flush_input(ch)
+                # 依 RTU/ASCII 組包送出
+                if mode == "ascii":
+                    frame = _build_ascii_frame(station, pdu)
+                    rs485.send(ch, frame)
+                    tx_time_ms = int((len(frame) * 11 * 1000) / max(1, baudrate)) + 2
+                    time.sleep_ms(tx_time_ms)
+                    raw = _read_ascii_response(ch, timeout_ms)
+                    resp_unit, resp_pdu = _parse_ascii_frame(raw)
+                else:
+                    frame = _build_rtu_frame(station, pdu)
+                    rs485.send(ch, frame)
+                    tx_time_ms = int((len(frame) * 11 * 1000) / max(1, baudrate)) + 2
+                    time.sleep_ms(tx_time_ms)
+                    raw = _read_rtu_response(ch, timeout_ms, baudrate)
+                    resp_unit, resp_pdu = _parse_rtu_frame(raw)
 
-        _last_comm["ch"] = ch
-        _last_comm["tx"] = _format_hex_bytes(frame)
-        _last_comm["rx"] = _format_hex_bytes(raw) if raw else ""
-        _last_comm["err"] = ""
-        _last_comm["rx_len"] = len(raw)
-        _last_comm["ts"] = time.ticks_ms()
-        if raw:
-            print("RS485 CH%d RX:" % ch, _format_hex_bytes(raw))
-        else:
-            print("RS485 CH%d RX: <empty>" % ch)
+                _last_comm["ch"] = ch
+                _last_comm["tx"] = _format_hex_bytes(frame)
+                _last_comm["rx"] = _format_hex_bytes(raw) if raw else ""
+                _last_comm["err"] = ""
+                _last_comm["rx_len"] = len(raw)
+                _last_comm["ts"] = time.ticks_ms()
+                if raw:
+                    print("RS485 CH%d RX:" % ch, _format_hex_bytes(raw))
+                else:
+                    print("RS485 CH%d RX: <empty>" % ch)
 
-        # 回覆解析失敗時，嘗試在 raw 內找可通過 CRC 的 frame
-        if resp_unit is None or resp_pdu is None:
-            resp_unit, resp_pdu = _find_rtu_frame(raw)
-        if resp_unit is None or resp_pdu is None:
-            _results[_idx - 1] = "TIMEOUT" if raw == b"" else "BAD CRC"
-            return
-        if resp_unit != station:
-            _results[_idx - 1] = "STA MISMATCH"
-            return
-        _update_registers(cmd, resp_pdu, _idx - 1, data)
-        _results[_idx - 1] = _parse_return(cmd, resp_pdu)
-    except Exception as e:
-        _last_comm["ch"] = ch if "ch" in locals() else 0
-        _last_comm["err"] = str(e)[:40]
-        _results[_idx - 1] = "ERR " + str(e)[:20]
+                # 回覆解析失敗時，嘗試在 raw 內找可通過 CRC 的 frame
+                if resp_unit is None or resp_pdu is None:
+                    resp_unit, resp_pdu = _find_rtu_frame(raw)
+                if resp_unit is None or resp_pdu is None:
+                    _results[row_index] = "TIMEOUT" if raw == b"" else "BAD CRC"
+                    return
+                if resp_unit != station:
+                    _results[row_index] = "STA MISMATCH"
+                    return
+                _update_registers(cmd, resp_pdu, row_index, data)
+                _results[row_index] = _parse_return(cmd, resp_pdu)
+            except Exception as e:
+                _last_comm["ch"] = ch if "ch" in locals() else 0
+                _last_comm["err"] = str(e)[:40]
+                _results[row_index] = "ERR " + str(e)[:20]
+            finally:
+                if lock_held:
+                    lock_release(ch)
     finally:
-        lock_release(ch)
+        ended_ms = time.ticks_ms()
+        _last_elapsed_ms = time.ticks_diff(ended_ms, started_ms)
+        _next_due_ms = time.ticks_add(ended_ms, interval_ms)
 
 
 # =============== 輪詢狀態查詢 ===============
@@ -412,12 +419,20 @@ def status():
     """提供 Web UI 查詢：狀態、回覆、最近一次通訊。"""
     cfg = get_config()
     poller_cfg = cfg.get("poller") or {}
+    timeout_ms = get_response_timeout_ms(cfg)
+    now = time.ticks_ms()
+    next_due_in_ms = 0
+    if _next_due_ms and time.ticks_diff(_next_due_ms, now) > 0:
+        next_due_in_ms = time.ticks_diff(_next_due_ms, now)
     return {
         "enabled": bool(_force_enabled if _force_enabled is not None else poller_cfg.get("enabled")),
         "interval_ms": int(poller_cfg.get("interval_ms") or 1000),
+        "response_timeout_ms": timeout_ms,
         "index": _idx,
         "results": _results,
         "last_comm": _last_comm,
+        "last_elapsed_ms": _last_elapsed_ms,
+        "next_due_in_ms": next_due_in_ms,
         "row_count": len(poller_cfg.get("rows") or []),
     }
 
@@ -427,8 +442,9 @@ def status():
 # 由 Web API 強制啟用/停用輪詢，並重置索引與時間基準。
 def set_enabled(enabled: bool) -> None:
     """立即啟停輪詢並重置索引與計時。"""
-    global _force_enabled, _last_enabled, _last_tick, _idx
+    global _force_enabled, _last_enabled, _next_due_ms, _idx, _last_elapsed_ms
     _force_enabled = bool(enabled)
     _last_enabled = _force_enabled
-    _last_tick = 0
+    _next_due_ms = 0
     _idx = 0
+    _last_elapsed_ms = 0

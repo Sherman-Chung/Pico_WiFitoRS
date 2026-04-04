@@ -8,6 +8,10 @@
 
 import time
 import machine
+try:
+    import _thread
+except Exception:
+    _thread = None
 
 try:
     from config import AUTO_CONFIG_AP_ON_BOOT
@@ -27,6 +31,37 @@ from Pico_UPS import read_battery, last_battery_error
 from config_store import get_config
 from modbus_gateway import start_modbus_tcp_server, poll_modbus_tcp_server
 from poller import tick as poller_tick
+
+_poller_thread_started = False
+
+
+def _poller_worker_loop():
+    """Core1 專用：持續執行 poller.tick()。"""
+    while True:
+        try:
+            poller_tick()
+        except Exception as e:
+            print("poller worker error:", e)
+        # 低延遲輪詢，同時避免空轉吃滿 CPU
+        time.sleep_ms(5)
+
+
+def start_poller_worker():
+    """啟動 Core1 輪詢工作；若不可用回傳 False。"""
+    global _poller_thread_started
+    if _poller_thread_started:
+        return True
+    if _thread is None:
+        print("Poller worker unavailable (_thread missing), fallback single-core")
+        return False
+    try:
+        _thread.start_new_thread(_poller_worker_loop, ())
+        _poller_thread_started = True
+        print("Poller worker started on core1")
+        return True
+    except Exception as e:
+        print("Poller worker start failed:", e)
+        return False
 
 
 # =============== 網路服務啟動 ===============
@@ -205,15 +240,18 @@ def main():
         services_started = True
         maybe_start_mdns()
 
+    poller_on_core1 = start_poller_worker()
+
     while True:
         # 主迴圈順序原則：
         # 1) 先處理人機介面命令（CMD/HTTP）
         # 2) 再處理 Modbus gateway
-        # 3) 最後做一次 Poller tick
+        # 3) Poller 由 Core1 執行；若 Core1 啟動失敗則退回單核心
         poll_cmd_server()
         poll_http_server()
         poll_modbus_tcp_server()
-        poller_tick()
+        if not poller_on_core1:
+            poller_tick()
         # 小睡避免 CPU 忙等，20ms 約等同 50Hz 排程節奏
         time.sleep_ms(20)
 

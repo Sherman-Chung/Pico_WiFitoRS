@@ -77,6 +77,23 @@ def get_config():
     return _cache
 
 
+# =============== Gateway Response Timeout 讀取 ===============
+# 說明：
+# 統一由 modbus.response_timeout_ms 讀取通訊等待時間，供 Gateway/Poller/RS HEX 共用。
+def get_response_timeout_ms(cfg=None) -> int:
+    """取得 Gateway response timeout（毫秒）。"""
+    if cfg is None:
+        cfg = get_config()
+    modbus = (cfg or {}).get("modbus") or {}
+    try:
+        timeout_ms = int(modbus.get("response_timeout_ms") or 1200)
+    except Exception:
+        timeout_ms = 1200
+    if timeout_ms < 1:
+        timeout_ms = 1
+    return timeout_ms
+
+
 # =============== AP 設定驗證 ===============
 # 說明：
 # 驗證 AP SSID/密碼欄位是否合法。

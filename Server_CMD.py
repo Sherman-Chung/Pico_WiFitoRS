@@ -190,12 +190,13 @@ def handle_cmd(cmd: str) -> str:
             if not lock_acquire(ch):
                 return "ERR RS BUSY"
             try:
-                from config_store import get_config
+                from config_store import get_config, get_response_timeout_ms
 
                 cfg = get_config()
                 modbus_cfg = cfg.get("modbus") or {}
                 ch_cfg = (modbus_cfg.get("ch0") if ch == 0 else modbus_cfg.get("ch1")) or {}
                 baudrate = int(ch_cfg.get("baudrate") or 9600)
+                timeout_ms = get_response_timeout_ms(cfg)
                 rs485.init(
                     ch,
                     baudrate=baudrate,
@@ -212,7 +213,7 @@ def handle_cmd(cmd: str) -> str:
                 buf = bytearray()
                 start = time.ticks_ms()
                 last_rx = start
-                while time.ticks_diff(time.ticks_ms(), start) < 1200:
+                while time.ticks_diff(time.ticks_ms(), start) < timeout_ms:
                     chunk = rs485.recv(ch, 256, log=False)
                     if chunk:
                         buf.extend(chunk)

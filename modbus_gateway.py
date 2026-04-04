@@ -8,15 +8,17 @@
 
 import socket
 import time
+from typing import Optional
 
 import Pico_RS485 as rs485
-from config_store import get_config
+from config_store import get_config, get_response_timeout_ms
 from rs485_lock import acquire as lock_acquire, release as lock_release
 from register_store import get_regs
 
 server_sock = None
 LOG_TCP = True
 TCP_IDLE_TIMEOUT_MS = None
+TCP_FAIR_YIELD_MS = 1
 
 
 # =============== CRC16 計算 ===============
@@ -85,7 +87,7 @@ def _parse_unit_map(expr: str):
 # =============== Unit ID 通道映射 ===============
 # 說明：
 # 依設定決定某個 Unit ID 應走 CH0、CH1，或不允許轉送（None）。
-def _unit_id_to_channel(unit_id: int, cfg) -> int | None:
+def _unit_id_to_channel(unit_id: int, cfg) -> Optional[int]:
     """依 unit_map 與 ch_enabled 判斷該 Unit ID 應走哪個 RS485 通道。"""
     modbus_cfg = cfg.get("modbus") or {}
     ch0_expr = (modbus_cfg.get("unit_map_ch0") or "").strip()
@@ -271,6 +273,9 @@ def poll_modbus_tcp_server():
         last_rx = time.ticks_ms()
         # 長連線模型：同一 client 可連續送多筆請求
         while True:
+            # 在高頻 TCP 請求下主動讓出 CPU，避免其他工作（含 poller thread）飢餓。
+            if TCP_FAIR_YIELD_MS > 0:
+                time.sleep_ms(TCP_FAIR_YIELD_MS)
             head = _read_exact(cl, 7, timeout_ms=800)
             if head is None:
                 if TCP_IDLE_TIMEOUT_MS is not None and time.ticks_diff(time.ticks_ms(), last_rx) > TCP_IDLE_TIMEOUT_MS:
@@ -306,19 +311,19 @@ def poll_modbus_tcp_server():
             # 每筆請求都讀一次設定，讓 Web 更新可立即生效
             cfg = get_config()
             modbus_cfg = cfg.get("modbus") or {}
-            timeout_ms = int(modbus_cfg.get("response_timeout_ms") or 1200)
+            timeout_ms = get_response_timeout_ms(cfg)
             tcp_slave_id = int(modbus_cfg.get("tcp_slave_id") or 1)
 
             # Unit ID 命中本地 slave id：走本地 registers，不轉送 RS485
             if unit_id == tcp_slave_id:
                 if len(pdu) >= 5 and pdu[0] in (0x03, 0x04):
-                    addr = (pdu[1] << 8) | pdu[2]
+                    reg_addr = (pdu[1] << 8) | pdu[2]
                     count = (pdu[3] << 8) | pdu[4]
-                    if count <= 0 or addr < 0 or addr + count > 256:
+                    if count <= 0 or reg_addr < 0 or reg_addr + count > 256:
                         resp_pdu = _make_exception_pdu(pdu, 0x02)
                         _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
                         continue
-                    regs = get_regs(addr, count)
+                    regs = get_regs(reg_addr, count)
                     data = bytearray()
                     for v in regs:
                         data.append((v >> 8) & 0xFF)
