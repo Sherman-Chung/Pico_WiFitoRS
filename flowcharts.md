@@ -17,13 +17,16 @@ flowchart TD
   M8 -->|No| M9[fail_halt LED 閃爍停機]
   M8 -->|Yes| M10[若 AP 未啟動則補啟 AP + DNS]
   M10 --> M11[若服務未啟動則補啟 HTTP TCP Modbus + mDNS]
-  M11 --> M12[進入主迴圈]
+  M11 --> M11A[啟動 Core1 Poller Worker]
+  M11A --> M12[Core0 主迴圈]
   M12 --> M13[poll_cmd_server]
   M13 --> M14[poll_http_server]
-  M14 --> M15[Modbus TCP 請求處理程序]
-  M15 --> M16[定時輪詢調度引擎]
-  M16 --> M17[sleep 20ms]
+  M14 --> M15[Modbus TCP 事件式處理]
+  M15 --> M17[sleep 20ms]
   M17 --> M12
+  M11A --> M16[Core1 定時輪詢調度引擎]
+  M16 --> M16A[sleep 5ms]
+  M16A --> M16
 
   %% ========================
   %% HTTP Server
@@ -64,12 +67,14 @@ flowchart TD
   %% ========================
   %% Modbus TCP Gateway
   %% ========================
-  B1[Modbus poll] --> B2{accept client?}
-  B2 -->|No| B3[return]
-  B2 -->|Yes| B4[建立連線並進入每 client 迴圈]
-  B4 --> B5[讀 MBAP 7 bytes 與 PDU]
-  B5 --> B6{封包可解析?}
-  B6 -->|No| B7[結束連線]
+  B1[Modbus poll] --> B2{已有活動 client?}
+  B2 -->|No| B2A{accept client?}
+  B2A -->|No| B3[return]
+  B2A -->|Yes| B4[建立活動連線狀態]
+  B2 -->|Yes| B5[非阻塞 recv 到 buffer]
+  B4 --> B5
+  B5 --> B6{buffer 有完整 MBAP+PDU?}
+  B6 -->|No| B3
   B6 -->|Yes| B8[讀 modbus config timeout tcp_slave_id]
   B8 --> B9{識別碼比對（本地/路由）}
   B9 -->|Yes| B10{Func 03/04 且範圍合法?}
@@ -91,7 +96,7 @@ flowchart TD
   B21 --> B5
   B19 -->|Yes| B22[封裝 MBAP 回覆]
   B22 --> B21
-  B7 --> B23[close client]
+  B22 --> B5
 
   %% ========================
   %% Poller
@@ -121,6 +126,8 @@ flowchart TD
   P18 -->|Yes| P20[解析回覆並更新本地 registers]
   P20 --> P21[更新 Return 與最近通訊狀態]
   P21 --> P16
+  P16 --> P22[設定 next_due = 本筆完成 + interval]
+  P22 --> P4
 
   %% ========================
   %% Integration

@@ -57,16 +57,16 @@
           <mxGeometry x="920" y="420" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="h_pstart" value="開始輪詢" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="h_pstart" value="開始輪詢&#xa;(force enable)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="920" y="490" width="200" height="70" as="geometry"/>
         </mxCell>
 
-        <mxCell id="h_pstop" value="停止輪詢" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="h_pstop" value="停止輪詢&#xa;(enabled=false)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="920" y="570" width="200" height="70" as="geometry"/>
         </mxCell>
 
-        <mxCell id="h_pstatus" value="看輪詢狀態" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="920" y="650" width="200" height="50" as="geometry"/>
+        <mxCell id="h_pstatus" value="看輪詢狀態&#xa;(next_due/last_elapsed/last_error)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="650" width="240" height="60" as="geometry"/>
         </mxCell>
 
         <mxCell id="h_cfg" value="讀/寫設定" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">

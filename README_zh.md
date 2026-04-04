@@ -14,7 +14,8 @@
 3. 若有保存 STA，會嘗試連線。
 4. 執行開機檢查（UPS 與已啟用的 RS485 通道）；失敗會 `fail_halt()` 並 LED 閃爍停機。
 5. 若前面未啟 AP 或未啟服務，會在檢查後補啟。
-6. 進入主迴圈，每 20ms 輪詢：`CMD TCP -> HTTP -> Modbus TCP -> Poller`。
+6. 啟動 Core1 輪詢工作執行緒（持續呼叫 `poller.tick()`）；若 `_thread` 不可用則退回單核心。
+7. Core0 進入主迴圈，每 20ms 輪詢：`CMD TCP -> HTTP -> Modbus TCP`。
 
 說明：
 - `AUTO_CONFIG_AP_ON_BOOT` 影響的是「啟動時機」，不是最終有無 AP。  
@@ -30,7 +31,8 @@
 
 ## Modbus Gateway 行為
 - Modbus TCP 預設 Port `502`（可配置）。
-- 採長連線模式：同一 TCP Client 可連續送多筆請求，直到對方斷線或發生錯誤。
+- 採事件式非阻塞模式：只有在收到 TCP bytes 時才解析/回覆，不在處理函式內等待下一包。
+- 支援長連線與封包緩衝：封包不完整時先暫存，待下次輪詢補齊後再解析。
 - Unit ID 路由規則：
   - `Unit ID == tcp_slave_id`：讀本地 registers（僅支援 Function 03/04）。
   - 其他 Unit ID：依 `unit_map_ch0/ch1` 對應 CH0 或 CH1，轉送到 RS485。
@@ -43,11 +45,20 @@
 ## Poller 行為
 - Poller 設定來源：`config_store.poller`，最多 256 列。
 - `interval_ms` 最小為 50ms。
+- `response_timeout_ms` 統一使用 Gateway 設定（`modbus.response_timeout_ms`）。
 - 每次 `tick()` 最多執行 1 列輪詢，依序循環。
+- 下一筆時間基準為「本筆完成時間 + interval」。
 - RS485 與 Modbus TCP 共用通道鎖，避免同通道同時收發。
 - 回覆寫入本地 registers 規則（以列索引為起點）：
   - 03/04：依 Byte Count 解析多筆 16-bit 寫入。
   - 05/06：寫入單筆 16-bit。
+
+## Gateway Register Map（橋樑）
+- 資料流：`TCP Polling <-> Gateway Register Map <-> RS485 Polling`
+- 本地 map 採 lock-free 讀寫：
+  - 寫入者：Poller（單一來源）
+  - 讀取者：Modbus TCP 本地讀取
+- 設計目標是高更新吞吐與低阻塞；一致性為最終一致（允許短暫新舊混合快照）。
 
 ## HTTP API（Port 80）
 - `GET /`：Web UI。

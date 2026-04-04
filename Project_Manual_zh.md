@@ -31,8 +31,8 @@
 - `poller.py`：輪詢表格執行與 registers 回填。
 - `Server_CMD.py`：指令 TCP Server 與命令解析。
 - `config_store.py`：設定載入、驗證、保存。
-- `register_store.py`：本地 0-255 registers。
-- `rs485_lock.py`：CH0/CH1 通道互斥鎖。
+- `register_store.py`：本地 0-255 registers（lock-free map bridge）。
+- `rs485_lock.py`：CH0/CH1 通道互斥鎖（跨核心）。
 
 ---
 
@@ -46,7 +46,8 @@
    - 已啟用 RS485 通道初始化檢查。
 5. 若檢查失敗，進入 `fail_halt()`（LED 閃爍，停止服務循環）。
 6. 若前面未啟 AP 或未啟服務，於此階段補啟。
-7. 進入主迴圈：每 20ms 依序輪詢 `poll_cmd_server`、`poll_http_server`、`poll_modbus_tcp_server`、`poller.tick()`。
+7. 啟動 Core1 輪詢工作執行緒（持續 `poller.tick()`；不可用則退回單核心）。
+8. Core0 主迴圈：每 20ms 依序輪詢 `poll_cmd_server`、`poll_http_server`、`poll_modbus_tcp_server`。
 
 重點：
 - `AUTO_CONFIG_AP_ON_BOOT` 只影響 AP/服務的啟動時機。
@@ -96,8 +97,9 @@
 
 ## 6. Modbus Gateway（Port 502）
 ### 6.1 TCP 連線模型
-- 採長連線模式。
-- 每次 `accept()` 一個 client 後，持續在同連線讀取多筆 MBAP+PDU，直到 client 關閉或錯誤。
+- 採事件式非阻塞模型。
+- `poll_modbus_tcp_server()` 只處理「目前可得」的 TCP 資料，不在函式內阻塞等待。
+- 支援活動連線緩衝：MBAP/PDU 不完整時先暫存，待下次輪詢補齊再解析。
 
 ### 6.2 路由與回應
 - `Unit ID == tcp_slave_id`：
@@ -124,7 +126,9 @@
 - 設定來源：`config_store.poller`。
 - 表格最多 256 列（儲存時會正規化）。
 - `interval_ms` 小於 50 時會被提升為 50。
+- `timeout_ms` 一律來自 `modbus.response_timeout_ms`（Gateway 單一真值）。
 - 每次 `tick()` 僅處理 1 列，依序循環。
+- 下一筆觸發時間 = 本筆完成時間 + `interval_ms`。
 
 ### 7.2 每列欄位
 - `ch`：`0` 或 `1`
@@ -139,6 +143,9 @@
 - 05/06：寫入 1 筆 16-bit 到「列索引」。
 - 通道忙碌或異常時，`Return` 可能顯示：
   - `BUSY` / `DISABLED` / `BAD ROW` / `TIMEOUT` / `BAD CRC` / `STA MISMATCH`
+- 本地 registers 作為橋樑：
+  - `TCP Polling <-> Gateway Register Map <-> RS485 Polling`
+  - map 採 lock-free 讀寫，設計為最終一致，優先保障高頻更新與低阻塞。
 
 ---
 
@@ -173,7 +180,7 @@
 ## 10. 已知限制
 - Pico 2 W 僅支援 2.4GHz 802.11 b/g/n。
 - RS485 同通道為半雙工，需要鎖保護序列化。
-- Modbus Gateway 為單執行緒輪詢架構，同時負載高時延遲會增加。
+- lock-free map 為最終一致設計，高頻讀取下可能讀到短暫新舊混合快照。
 
 ---
 

@@ -7,27 +7,6 @@
 REG_COUNT = 256
 _regs = [0] * REG_COUNT
 
-try:
-    import _thread
-except Exception:  # pragma: no cover
-    _thread = None
-
-
-if _thread is not None:
-    _regs_lock = _thread.allocate_lock()
-else:
-    _regs_lock = None
-
-
-def _lock_enter():
-    if _regs_lock is not None:
-        _regs_lock.acquire()
-
-
-def _lock_exit():
-    if _regs_lock is not None:
-        _regs_lock.release()
-
 
 # =============== 單筆暫存器寫入 ===============
 # 說明：
@@ -35,11 +14,7 @@ def _lock_exit():
 def set_reg(index: int, value: int) -> None:
     """寫入單一 16-bit register。"""
     if 0 <= index < REG_COUNT:
-        _lock_enter()
-        try:
-            _regs[index] = int(value) & 0xFFFF
-        finally:
-            _lock_exit()
+        _regs[index] = int(value) & 0xFFFF
 
 
 # =============== 多筆暫存器寫入 ===============
@@ -49,14 +24,10 @@ def set_regs(start: int, values) -> None:
     """從 start 起連續寫入多筆 16-bit register。"""
     if values is None:
         return
-    _lock_enter()
-    try:
-        for i, v in enumerate(values):
-            idx = start + i
-            if 0 <= idx < REG_COUNT:
-                _regs[idx] = int(v) & 0xFFFF
-    finally:
-        _lock_exit()
+    for i, v in enumerate(values):
+        idx = start + i
+        if 0 <= idx < REG_COUNT:
+            _regs[idx] = int(v) & 0xFFFF
 
 
 # =============== 暫存器讀取 ===============
@@ -66,15 +37,13 @@ def get_regs(start: int, count: int):
     """讀取 count 筆 register；越界位置以 0 補齊。"""
     if count <= 0:
         return []
-    _lock_enter()
-    try:
-        out = []
-        for i in range(count):
-            idx = start + i
-            if 0 <= idx < REG_COUNT:
-                out.append(_regs[idx])
-            else:
-                out.append(0)
-        return out
-    finally:
-        _lock_exit()
+    # 讀取端採用無鎖 best-effort，避免高頻 TCP 讀取長時間阻塞 Poller 寫入。
+    # 對 Gateway map 監看場景而言，偶發跨欄位非原子一致可接受。
+    out = []
+    for i in range(count):
+        idx = start + i
+        if 0 <= idx < REG_COUNT:
+            out.append(_regs[idx])
+        else:
+            out.append(0)
+    return out

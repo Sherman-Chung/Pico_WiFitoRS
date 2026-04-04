@@ -61,12 +61,16 @@
           <mxGeometry x="490" y="780" width="180" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="pollmodbus" value="處理 Modbus 請求" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="pollmodbus" value="處理 Modbus 請求&#xa;(事件式非阻塞)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="700" y="780" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="poller" value="輪詢表格" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="poller" value="sleep 20ms&#xa;(若無 Core1 才 fallback poller.tick)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="930" y="780" width="140" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="core1poll" value="Core1 背景執行緒&#xa;poller.tick() + sleep 5ms" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="840" y="680" width="230" height="70" as="geometry"/>
         </mxCell>
 
         <!-- Edges -->
@@ -121,6 +125,9 @@
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
         <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="poller" target="loop">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e18" value="啟動" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="ensuresvc" target="core1poll">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 

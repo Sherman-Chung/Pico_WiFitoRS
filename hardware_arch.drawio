@@ -5,8 +5,8 @@
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
 
-        <mxCell id="pico" value="Raspberry Pi Pico 2 W" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
-          <mxGeometry x="520" y="330" width="240" height="80" as="geometry"/>
+        <mxCell id="pico" value="Raspberry Pi Pico 2 W&#xa;Core0: TCP/HTTP/CMD&#xa;Core1: RS485 Poller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="520" y="320" width="240" height="100" as="geometry"/>
         </mxCell>
 
         <mxCell id="ups" value="UPS/INA219 模組" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
@@ -62,7 +62,7 @@
         </mxCell>
 
         <!-- RS485 -->
-        <mxCell id="e5" value="UART0/1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="pico" target="rs485">
+        <mxCell id="e5" value="UART0/1 (共享鎖)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="pico" target="rs485">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
         <mxCell id="e6" value="CH0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="rs485" target="dev0">

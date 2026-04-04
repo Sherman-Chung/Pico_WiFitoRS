@@ -5,11 +5,11 @@
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
 
-        <mxCell id="p_start" value="輪詢一次" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="p_start" value="Core1 輪詢一次" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="60" y="40" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="p_cfg" value="讀輪詢設定" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="p_cfg" value="讀輪詢設定 + Gateway timeout" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="60" y="120" width="240" height="50" as="geometry"/>
         </mxCell>
 
@@ -21,7 +21,7 @@
           <mxGeometry x="340" y="220" width="120" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="p_interval" value="時間到了嗎?" style="rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+        <mxCell id="p_interval" value="到達 next_due 嗎?" style="rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
           <mxGeometry x="110" y="320" width="140" height="80" as="geometry"/>
         </mxCell>
 
@@ -57,15 +57,15 @@
           <mxGeometry x="520" y="740" width="220" height="60" as="geometry"/>
         </mxCell>
 
-        <mxCell id="p_update" value="更新結果 + 暫存" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="p_update" value="更新結果 + 本地 map&#xa;(lock-free bridge)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="520" y="820" width="240" height="60" as="geometry"/>
         </mxCell>
 
-        <mxCell id="p_next" value="換下一筆" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="p_next" value="計算 next_due&#xa;(完成時間 + interval)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="520" y="900" width="180" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="p_release" value="解鎖" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="p_release" value="釋放 RS485 鎖" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="730" y="900" width="160" height="50" as="geometry"/>
         </mxCell>
 

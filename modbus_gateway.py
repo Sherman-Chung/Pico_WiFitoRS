@@ -8,7 +8,6 @@
 
 import socket
 import time
-from typing import Optional
 
 import Pico_RS485 as rs485
 from config_store import get_config, get_response_timeout_ms
@@ -19,6 +18,13 @@ server_sock = None
 LOG_TCP = True
 TCP_IDLE_TIMEOUT_MS = None
 TCP_FAIR_YIELD_MS = 1
+TCP_RECV_CHUNK = 512
+TCP_POLL_BUDGET_MS = 1
+
+_active_client = None
+_active_addr = None
+_active_buf = b""
+_active_last_rx = 0
 
 
 # =============== CRC16 計算 ===============
@@ -87,7 +93,7 @@ def _parse_unit_map(expr: str):
 # =============== Unit ID 通道映射 ===============
 # 說明：
 # 依設定決定某個 Unit ID 應走 CH0、CH1，或不允許轉送（None）。
-def _unit_id_to_channel(unit_id: int, cfg) -> Optional[int]:
+def _unit_id_to_channel(unit_id: int, cfg):
     """依 unit_map 與 ch_enabled 判斷該 Unit ID 應走哪個 RS485 通道。"""
     modbus_cfg = cfg.get("modbus") or {}
     ch0_expr = (modbus_cfg.get("unit_map_ch0") or "").strip()
@@ -252,145 +258,188 @@ def _read_exact(sock, size: int, timeout_ms: int = 1000):
     return data
 
 
-# =============== Modbus TCP 輪詢處理 ===============
-# 說明：
-# 輪詢 accept 後在同一 client 連線上持續處理 MBAP+PDU，
-# 依 Unit ID 決定回本地 registers 或轉送 RS485。
-def poll_modbus_tcp_server():
-    """輪詢一次 Modbus TCP：accept 一個 client，並在同連線上持續處理請求。"""
-    global server_sock
-    if server_sock is None:
-        return
+def _close_active_client():
+    """關閉目前活動 TCP client，並清空緩衝狀態。"""
+    global _active_client, _active_addr, _active_buf, _active_last_rx
     try:
-        cl, addr = server_sock.accept()
-    except OSError:
+        if _active_client is not None:
+            _active_client.close()
+    except Exception:
+        pass
+    if LOG_TCP and _active_addr is not None:
+        print("TCP DISCONNECT:", _active_addr)
+    _active_client = None
+    _active_addr = None
+    _active_buf = b""
+    _active_last_rx = 0
+
+
+def _handle_mb_tcp_request(cl, tid: bytes, unit_id: int, pdu: bytes):
+    """處理單筆已解析的 Modbus TCP 請求。"""
+    # 每筆請求都讀一次設定，讓 Web 更新可立即生效
+    cfg = get_config()
+    modbus_cfg = cfg.get("modbus") or {}
+    timeout_ms = get_response_timeout_ms(cfg)
+    tcp_slave_id = int(modbus_cfg.get("tcp_slave_id") or 1)
+
+    # Unit ID 命中本地 slave id：走本地 registers，不轉送 RS485
+    if unit_id == tcp_slave_id:
+        if len(pdu) >= 5 and pdu[0] in (0x03, 0x04):
+            reg_addr = (pdu[1] << 8) | pdu[2]
+            count = (pdu[3] << 8) | pdu[4]
+            if count <= 0 or reg_addr < 0 or reg_addr + count > 256:
+                resp_pdu = _make_exception_pdu(pdu, 0x02)
+                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                return
+            regs = get_regs(reg_addr, count)
+            data = bytearray()
+            for v in regs:
+                data.append((v >> 8) & 0xFF)
+                data.append(v & 0xFF)
+            resp_pdu = bytes([pdu[0], len(data)]) + bytes(data)
+            _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+            return
+        resp_pdu = _make_exception_pdu(pdu, 0x01)
+        _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+        return
+
+    # 其他 Unit ID：依 unit map 決定要轉送的 RS485 通道
+    ch = _unit_id_to_channel(unit_id, cfg)
+    if ch is None:
+        resp_pdu = _make_exception_pdu(pdu, 0x0B)
+        _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+        return
+    # 同一通道同時間只能有一筆收發，避免半雙工碰撞
+    if not lock_acquire(ch):
+        resp_pdu = _make_exception_pdu(pdu, 0x06)
+        _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
         return
 
     try:
+        ch_cfg = (modbus_cfg.get("ch0") if ch == 0 else modbus_cfg.get("ch1")) or {}
+        mode = (ch_cfg.get("mode") or "rtu").lower()
+        rs485.init(
+            ch,
+            baudrate=int(ch_cfg.get("baudrate") or 9600),
+            parity=ch_cfg.get("parity") or "N",
+            stopbits=int(ch_cfg.get("stopbits") or 1),
+            bits=int(ch_cfg.get("bits") or 8),
+        )
+        if unit_id == 0:
+            resp_pdu = _make_exception_pdu(pdu, 0x0B)
+            _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+            return
+        # 依通道 mode 選擇 RTU 或 ASCII 封包流程
+        if mode == "ascii":
+            frame = _build_ascii_frame(unit_id, pdu)
+            rs485.flush_input(ch)
+            rs485.send(ch, frame)
+            raw = _read_ascii_response(ch, timeout_ms)
+            resp_unit, resp_pdu = _parse_ascii_frame(raw)
+        else:
+            frame = _build_rtu_frame(unit_id, pdu)
+            rs485.flush_input(ch)
+            rs485.send(ch, frame)
+            raw = _read_rtu_response(ch, timeout_ms, int(ch_cfg.get("baudrate") or 9600))
+            resp_unit, resp_pdu = _parse_rtu_frame(raw)
+
+        if resp_unit is None or resp_pdu is None:
+            resp_pdu = _make_exception_pdu(pdu, 0x0B)
+            _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+            return
+        _send_mb_tcp_response(cl, tid, resp_unit, resp_pdu)
+    finally:
+        lock_release(ch)
+
+
+# =============== Modbus TCP 輪詢處理 ===============
+# 說明：
+# 事件式非阻塞處理：只有收到 TCP 封包才解析/回覆，不在此函式內等待。
+def poll_modbus_tcp_server():
+    """輪詢一次 Modbus TCP：僅處理目前可得資料，不阻塞等待。"""
+    global server_sock, _active_client, _active_addr, _active_buf, _active_last_rx
+    if server_sock is None:
+        return
+
+    # 若沒有活動 client，嘗試非阻塞 accept 一個新連線
+    if _active_client is None:
+        try:
+            cl, addr = server_sock.accept()
+        except OSError:
+            return
+        try:
+            cl.settimeout(0.0)
+        except Exception:
+            pass
+        _active_client = cl
+        _active_addr = addr
+        _active_buf = b""
+        _active_last_rx = time.ticks_ms()
         if LOG_TCP:
             print("TCP CONNECT:", addr)
-        cl.settimeout(0.2)
-        last_rx = time.ticks_ms()
-        # 長連線模型：同一 client 可連續送多筆請求
+
+    # 連線閒置逾時（可選）
+    if TCP_IDLE_TIMEOUT_MS is not None and _active_last_rx:
+        if time.ticks_diff(time.ticks_ms(), _active_last_rx) > TCP_IDLE_TIMEOUT_MS:
+            _close_active_client()
+            return
+
+    # 在高頻請求下主動讓出 CPU，避免其他工作（含 poller thread）飢餓。
+    if TCP_FAIR_YIELD_MS > 0:
+        time.sleep_ms(TCP_FAIR_YIELD_MS)
+
+    # 非阻塞接收目前可得資料
+    try:
         while True:
-            # 在高頻 TCP 請求下主動讓出 CPU，避免其他工作（含 poller thread）飢餓。
-            if TCP_FAIR_YIELD_MS > 0:
-                time.sleep_ms(TCP_FAIR_YIELD_MS)
-            head = _read_exact(cl, 7, timeout_ms=800)
-            if head is None:
-                if TCP_IDLE_TIMEOUT_MS is not None and time.ticks_diff(time.ticks_ms(), last_rx) > TCP_IDLE_TIMEOUT_MS:
+            try:
+                chunk = _active_client.recv(TCP_RECV_CHUNK)
+            except OSError as e:
+                code = e.args[0] if e.args else None
+                # 非阻塞下「目前沒資料」：直接進入解析流程
+                if code in (11, 35, 110, 116, 119):
                     break
-                continue
-            if head == b"":
+                _close_active_client()
+                return
+            if not chunk:
+                _close_active_client()
+                return
+            _active_buf += chunk
+            _active_last_rx = time.ticks_ms()
+            if len(chunk) < TCP_RECV_CHUNK:
                 break
-            if len(head) < 7:
-                break
-            last_rx = time.ticks_ms()
+    except Exception:
+        _close_active_client()
+        return
+
+    # 解析目前緩衝內完整封包（時間預算內）
+    parse_t0 = time.ticks_ms()
+    try:
+        while True:
+            if time.ticks_diff(time.ticks_ms(), parse_t0) >= TCP_POLL_BUDGET_MS:
+                return
+            if len(_active_buf) < 7:
+                return
+            head = _active_buf[:7]
             tid = head[0:2]
             pid = head[2:4]
             length = (head[4] << 8) | head[5]
             unit_id = head[6]
             if pid != b"\x00\x00":
-                break
-            body = _read_exact(cl, max(0, length - 1), timeout_ms=800)
-            if body is None and length > 1:
-                if TCP_IDLE_TIMEOUT_MS is not None and time.ticks_diff(time.ticks_ms(), last_rx) > TCP_IDLE_TIMEOUT_MS:
-                    break
-                continue
-            if body == b"" and length > 1:
-                break
-            if body is None:
-                break
-            if len(body) < max(0, length - 1):
-                break
-            last_rx = time.ticks_ms()
-            pdu = body
+                _close_active_client()
+                return
+            body_len = max(0, length - 1)
+            total_len = 7 + body_len
+            if len(_active_buf) < total_len:
+                return
+            packet = _active_buf[:total_len]
+            pdu = _active_buf[7:total_len]
+            _active_buf = _active_buf[total_len:]
             if LOG_TCP:
-                print("TCP RX:", _hex_line(head + body))
-
-            # 每筆請求都讀一次設定，讓 Web 更新可立即生效
-            cfg = get_config()
-            modbus_cfg = cfg.get("modbus") or {}
-            timeout_ms = get_response_timeout_ms(cfg)
-            tcp_slave_id = int(modbus_cfg.get("tcp_slave_id") or 1)
-
-            # Unit ID 命中本地 slave id：走本地 registers，不轉送 RS485
-            if unit_id == tcp_slave_id:
-                if len(pdu) >= 5 and pdu[0] in (0x03, 0x04):
-                    reg_addr = (pdu[1] << 8) | pdu[2]
-                    count = (pdu[3] << 8) | pdu[4]
-                    if count <= 0 or reg_addr < 0 or reg_addr + count > 256:
-                        resp_pdu = _make_exception_pdu(pdu, 0x02)
-                        _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-                        continue
-                    regs = get_regs(reg_addr, count)
-                    data = bytearray()
-                    for v in regs:
-                        data.append((v >> 8) & 0xFF)
-                        data.append(v & 0xFF)
-                    resp_pdu = bytes([pdu[0], len(data)]) + bytes(data)
-                    _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-                    continue
-                resp_pdu = _make_exception_pdu(pdu, 0x01)
-                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-                continue
-
-            # 其他 Unit ID：依 unit map 決定要轉送的 RS485 通道
-            ch = _unit_id_to_channel(unit_id, cfg)
-            if ch is None:
-                resp_pdu = _make_exception_pdu(pdu, 0x0B)
-                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-                continue
-            # 同一通道同時間只能有一筆收發，避免半雙工碰撞
-            if not lock_acquire(ch):
-                resp_pdu = _make_exception_pdu(pdu, 0x06)
-                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-                continue
-
-            try:
-                ch_cfg = (modbus_cfg.get("ch0") if ch == 0 else modbus_cfg.get("ch1")) or {}
-                mode = (ch_cfg.get("mode") or "rtu").lower()
-                rs485.init(
-                    ch,
-                    baudrate=int(ch_cfg.get("baudrate") or 9600),
-                    parity=ch_cfg.get("parity") or "N",
-                    stopbits=int(ch_cfg.get("stopbits") or 1),
-                    bits=int(ch_cfg.get("bits") or 8),
-                )
-                if unit_id == 0:
-                    resp_pdu = _make_exception_pdu(pdu, 0x0B)
-                    _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-                    continue
-                # 依通道 mode 選擇 RTU 或 ASCII 封包流程
-                if mode == "ascii":
-                    frame = _build_ascii_frame(unit_id, pdu)
-                    rs485.flush_input(ch)
-                    rs485.send(ch, frame)
-                    raw = _read_ascii_response(ch, timeout_ms)
-                    resp_unit, resp_pdu = _parse_ascii_frame(raw)
-                else:
-                    frame = _build_rtu_frame(unit_id, pdu)
-                    rs485.flush_input(ch)
-                    rs485.send(ch, frame)
-                    raw = _read_rtu_response(ch, timeout_ms, int(ch_cfg.get("baudrate") or 9600))
-                    resp_unit, resp_pdu = _parse_rtu_frame(raw)
-
-                if resp_unit is None or resp_pdu is None:
-                    resp_pdu = _make_exception_pdu(pdu, 0x0B)
-                    _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
-                    continue
-                _send_mb_tcp_response(cl, tid, resp_unit, resp_pdu)
-            finally:
-                lock_release(ch)
+                print("TCP RX:", _hex_line(packet))
+            _handle_mb_tcp_request(_active_client, tid, unit_id, pdu)
     except Exception as e:
         print("Modbus TCP error:", e)
-    finally:
-        try:
-            if LOG_TCP:
-                print("TCP DISCONNECT:", addr)
-            cl.close()
-        except Exception:
-            pass
+        _close_active_client()
 
 
 # =============== MBAP 回應封裝 ===============
