@@ -1,8 +1,11 @@
 {
     "python.languageServer": "Pylance",
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.diagnosticMode": "openFilesOnly",
     "python.analysis.diagnosticSeverityOverrides": {
-        "reportMissingModuleSource": "none"
+        "reportMissingModuleSource": "none",
+        "reportMissingImports": "none",
+        "reportGeneralTypeIssues": "none"
     },
     "python.terminal.activateEnvironment": false,
     "micropico.openOnStart": true,
