@@ -12,7 +12,8 @@ import time
 import Pico_RS485 as rs485
 from config_store import get_config, get_response_timeout_ms
 from rs485_lock import acquire as lock_acquire, release as lock_release
-from register_store import get_regs
+from register_store import get_regs, set_reg
+import hold_register_map as hrm
 
 server_sock = None
 LOG_TCP = True
@@ -281,30 +282,132 @@ def _handle_mb_tcp_request(cl, tid: bytes, unit_id: int, pdu: bytes):
     modbus_cfg = cfg.get("modbus") or {}
     timeout_ms = get_response_timeout_ms(cfg)
     tcp_slave_id = int(modbus_cfg.get("tcp_slave_id") or 1)
+    tcp_rs485_mode = (modbus_cfg.get("tcp_rs485_mode") or "").strip().lower()
+    if tcp_rs485_mode not in ("disabled", "ch0", "ch1"):
+        tcp_rs485_mode = "ch0" if bool(modbus_cfg.get("tcp_indirect_control", False)) else "disabled"
 
-    # Unit ID 命中本地 slave id：走本地 registers，不轉送 RS485
+    # =============== 本地 Register Map 讀寫（0-69 配置區 + 其他） ===============
+    # 說明：
+    # TCP Slave ID 對應本地 Hold Register 讀寫；使用自動編碼/解碼
     if unit_id == tcp_slave_id:
-        if len(pdu) >= 5 and pdu[0] in (0x03, 0x04):
+        # Modbus FC 03 (Read Holding Registers)
+        if len(pdu) >= 5 and pdu[0] == 0x03:
             reg_addr = (pdu[1] << 8) | pdu[2]
             count = (pdu[3] << 8) | pdu[4]
-            if count <= 0 or reg_addr < 0 or reg_addr + count > 256:
+            if count <= 0 or count > 125 or reg_addr < 0 or reg_addr + count > 512:
                 resp_pdu = _make_exception_pdu(pdu, 0x02)
                 _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
                 return
-            regs = get_regs(reg_addr, count)
+            
+            # 讀配置區時自動解碼（例如波特率編碼 2 → 9600）
+            should_decode = (0 <= reg_addr < 23)  # 配置區 0-22
+            regs = get_regs(reg_addr, count, decode=should_decode)
+            
             data = bytearray()
             for v in regs:
                 data.append((v >> 8) & 0xFF)
                 data.append(v & 0xFF)
-            resp_pdu = bytes([pdu[0], len(data)]) + bytes(data)
+            resp_pdu = bytes([0x03, len(data)]) + bytes(data)
             _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
             return
+        
+        # Modbus FC 16 (Write Multiple Registers)
+        elif len(pdu) >= 9 and pdu[0] == 0x10:
+            reg_addr = (pdu[1] << 8) | pdu[2]
+            count = (pdu[3] << 8) | pdu[4]
+            byte_count = pdu[5]
+            
+            if count <= 0 or count > 125 or byte_count != count * 2:
+                resp_pdu = _make_exception_pdu(pdu, 0x02)
+                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                return
+            
+            if len(pdu) < 6 + byte_count:
+                resp_pdu = _make_exception_pdu(pdu, 0x02)
+                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                return
+            
+            # 寫入配置區時自動編碼
+            should_encode = (0 <= reg_addr < 23)  # 配置區 0-22
+            success_count = 0
+            error = False
+            
+            for i in range(count):
+                idx = reg_addr + i
+                raw_val = (pdu[6 + i*2] << 8) | pdu[6 + i*2 + 1]
+                
+                # 自動驗證和編碼
+                ok, err_msg = set_reg(idx, raw_val, encode=should_encode)
+                if ok:
+                    success_count += 1
+                else:
+                    if LOG_TCP:
+                        print(f"Register write error at {idx}: {err_msg}")
+                    error = True
+            
+            if error or success_count != count:
+                resp_pdu = _make_exception_pdu(pdu, 0x03)  # Illegal data value
+                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                return
+            
+            # 回覆：FC 16 成功時回報地址與數量
+            resp_pdu = bytes([0x10, pdu[1], pdu[2], pdu[3], pdu[4]])
+            _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+            return
+
+        # Modbus FC 06 (Write Single Register)
+        elif len(pdu) >= 5 and pdu[0] == 0x06:
+            reg_addr = (pdu[1] << 8) | pdu[2]
+            raw_val = (pdu[3] << 8) | pdu[4]
+
+            if reg_addr < 0 or reg_addr >= 512:
+                resp_pdu = _make_exception_pdu(pdu, 0x02)
+                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                return
+
+            # 寫入配置區時自動編碼
+            should_encode = (0 <= reg_addr < 23)  # 配置區 0-22
+            ok, err_msg = set_reg(reg_addr, raw_val, encode=should_encode)
+            if not ok:
+                if LOG_TCP:
+                    print(f"Register write error at {reg_addr}: {err_msg}")
+                resp_pdu = _make_exception_pdu(pdu, 0x03)
+                _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+                return
+
+            # 回覆：FC 06 成功時回覆原請求資料
+            resp_pdu = bytes([0x06, pdu[1], pdu[2], pdu[3], pdu[4]])
+            _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+            return
+        
+        # 不支援的功能碼
         resp_pdu = _make_exception_pdu(pdu, 0x01)
         _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
         return
 
-    # 其他 Unit ID：依 unit map 決定要轉送的 RS485 通道
-    ch = _unit_id_to_channel(unit_id, cfg)
+    # REG3=disabled 時，只允許讀寫本地 Register（不轉送到 RS485）
+    if tcp_rs485_mode == "disabled":
+        resp_pdu = _make_exception_pdu(pdu, 0x03)
+        _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+        return
+
+    # 其他 Unit ID：REG3 指定固定轉送通道（ch0/ch1）
+    if tcp_rs485_mode == "ch0":
+        ch = 0
+    elif tcp_rs485_mode == "ch1":
+        ch = 1
+    else:
+        ch = _unit_id_to_channel(unit_id, cfg)
+
+    # 指定通道若未啟用，回應 gateway target failed
+    if ch == 0 and not bool(modbus_cfg.get("ch0_enabled", False)):
+        resp_pdu = _make_exception_pdu(pdu, 0x0B)
+        _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+        return
+    if ch == 1 and not bool(modbus_cfg.get("ch1_enabled", False)):
+        resp_pdu = _make_exception_pdu(pdu, 0x0B)
+        _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
+        return
     if ch is None:
         resp_pdu = _make_exception_pdu(pdu, 0x0B)
         _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)

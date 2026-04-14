@@ -1,104 +1,93 @@
 # Pico 2 W Wi-Fi Modbus Gateway 說明（中文）
 
-本專案以 Raspberry Pi Pico 2 W 提供以下功能：
+本專案在 Raspberry Pi Pico 2 W 上提供：
 - 內建 AP + Captive DNS 設定入口（預設 `PicoSetup` / `pico1234`）。
-- STA 連線既有 Wi-Fi（可保存設定，重開機自動嘗試重連）。
+- STA 連線既有 Wi-Fi（可「套用到 RAM」，按 `REG60` 才寫入 Flash）。
 - 2-Port Modbus RTU/ASCII <-> 1-Port Modbus TCP Gateway。
-- Web UI 管理 Gateway 參數、輪詢表格、Wi-Fi 與 RS485 HEX 測試。
-- Poller 結果回填本地 0-255 registers，可由 Modbus TCP 讀取。
-- 電源資訊（外部/電池/待機）與電量百分比顯示。
+- Web UI 管理 Gateway、Poller、AP/STA、System 控制。
+- Hold Register 512 格式化記憶體（配置/狀態/控制/輪詢）。
 
-## 啟動流程（以目前程式為準）
-1. `main.py` 讀取 `config_store`（AP/STA/Modbus/Poller）與 `AUTO_CONFIG_AP_ON_BOOT`。
-2. 若 `AUTO_CONFIG_AP_ON_BOOT=True`，會先啟動 AP、DNS、HTTP/TCP/Modbus 服務與 mDNS。
-3. 若有保存 STA，會嘗試連線。
-4. 執行開機檢查（UPS 與已啟用的 RS485 通道）；失敗會 `fail_halt()` 並 LED 閃爍停機。
-5. 若前面未啟 AP 或未啟服務，會在檢查後補啟。
-6. 啟動 Core1 輪詢工作執行緒（持續呼叫 `poller.tick()`）；若 `_thread` 不可用則退回單核心。
-7. Core0 進入主迴圈，每 20ms 輪詢：`CMD TCP -> HTTP -> Modbus TCP`。
+## 啟動流程（以現行程式為準）
+1. `main.py` 讀取 `config_store`，並初始化 Hold Register 512（`register_store.initialize_from_config`）。
+2. 若有保存 STA，先嘗試連線（目前 timeout 約 6 秒）。
+3. 讀 `REG20 (AP enable)` 決策 AP：
+   - STA 成功 + `REG20=1` -> 啟 AP。
+   - STA 成功 + `REG20=0` -> 不啟 AP。
+   - STA 失敗 + `REG20=1` -> 啟 AP。
+   - STA 失敗 + `REG20=0` -> 強制啟 AP，並回寫 `REG20=1`。
+4. 啟動網路服務：HTTP(80) + Modbus TCP(502) + CMD TCP(12345) + mDNS（若 5353 未被占用）。
+5. 等待網路穩定後執行開機檢查：UPS/INA219 + 已啟用 RS485 通道。
+6. 讀 `REG21` 決定是否啟動 Core1 Poller worker。
+7. Core0 主迴圈每 20ms：`poll_cmd_server -> poll_http_server -> poll_modbus_tcp_server -> 更新狀態寄存器`。
+8. 主迴圈每 100ms 檢查控制命令（`REG60/61/62/64`）。
 
-說明：
-- `AUTO_CONFIG_AP_ON_BOOT` 影響的是「啟動時機」，不是最終有無 AP。  
-  在檢查通過的正常流程下，系統最後會確保 AP 與服務可用。
-
-## 網路與名稱解析
-- AP 與 STA 可並行。
-- Captive DNS 會將所有網域查詢回覆為目標 IP：
-  - 若 AP 目前有裝置連線，固定回 `192.168.4.1`。
-  - 否則若 STA 已連線，回 STA IP。
-  - 否則回 `192.168.4.1`。
-- mDNS 會回覆 `pico.local` 的 A 記錄（若 5353/Multicast 可正常使用）。
+## Hold Register 關鍵控制位
+- `REG20`：AP Enable（0=off, 1=on）
+- `REG21`：Poller Enable（0=off, 1=on）
+- `REG60`：Save Config（寫 1 -> RAM 設定寫入 Flash）
+- `REG61`：Reset Config（寫 1 -> 回預設並重啟）
+- `REG62`：Reboot（寫 1 -> 重啟）
+- `REG63`：Command Status（0 idle / 1 busy / 2 success / 3 error）
+- `REG64`：Apply Config（寫 1 -> 將 Register 配置套用到 RAM + UART）
 
 ## Modbus Gateway 行為
-- Modbus TCP 預設 Port `502`（可配置）。
-- 採事件式非阻塞模式：只有在收到 TCP bytes 時才解析/回覆，不在處理函式內等待下一包。
-- 支援長連線與封包緩衝：封包不完整時先暫存，待下次輪詢補齊後再解析。
-- Unit ID 路由規則：
-  - `Unit ID == tcp_slave_id`：讀本地 registers（僅支援 Function 03/04）。
-  - 其他 Unit ID：依 `unit_map_ch0/ch1` 對應 CH0 或 CH1，轉送到 RS485。
-- 例外回覆：
-  - `0x01`：本地 registers 不支援的功能碼。
-  - `0x02`：本地 registers 位址/數量不合法。
-  - `0x06`：RS485 通道忙碌（鎖定失敗）。
-  - `0x0B`：無可用通道、Unit ID 無對應、或 RS485 回覆無效/逾時。
+- `Unit ID == tcp_slave_id`：走本地 Hold Register（FC03/FC04 讀；FC06/FC16 寫）。
+- `Unit ID != tcp_slave_id`：依 `REG3 (TCP_RS485_MODE)`：
+  - `disabled`：拒絕轉送，回 Exception `0x03`。
+  - `ch0`：固定轉送 CH0。
+  - `ch1`：固定轉送 CH1。
+- 指定通道未啟用時回 `0x0B`；鎖失敗回 `0x06`；下游回覆異常/逾時回 `0x0B`。
 
-## Poller 行為
-- Poller 設定來源：`config_store.poller`，最多 256 列。
-- `interval_ms` 最小為 50ms。
-- `response_timeout_ms` 統一使用 Gateway 設定（`modbus.response_timeout_ms`）。
-- 每次 `tick()` 最多執行 1 列輪詢，依序循環。
-- 下一筆時間基準為「本筆完成時間 + interval」。
-- RS485 與 Modbus TCP 共用通道鎖，避免同通道同時收發。
-- 回覆寫入本地 registers 規則（以列索引為起點）：
-  - 03/04：依 Byte Count 解析多筆 16-bit 寫入。
-  - 05/06：寫入單筆 16-bit。
-
-## Gateway Register Map（橋樑）
-- 資料流：`TCP Polling <-> Gateway Register Map <-> RS485 Polling`
-- 本地 map 採 lock-free 讀寫：
-  - 寫入者：Poller（單一來源）
-  - 讀取者：Modbus TCP 本地讀取
-- 設計目標是高更新吞吐與低阻塞；一致性為最終一致（允許短暫新舊混合快照）。
+## 設定套用與保存
+- Gateway UART 參數由 `POST /gateway/configure` 寫入配置區後，觸發 `REG64` 套用。
+- 大多數 Web 設定先更新 RAM（`update_config(..., persist=False)`）。
+- 只有按 System 的「存入 Flash（REG60）」才會持久化。
 
 ## HTTP API（Port 80）
-- `GET /`：Web UI。
-- `GET /wifi/scan`：掃描 AP。
-- `GET /wifi/status`：STA/AP 狀態、RSSI、IP、電源與電量。
-- `POST /wifi/connect`：連線 STA，可選擇保存。
-- `GET /cfg`：讀取完整設定。
-- `POST /cfg`：更新設定（ap/sta/modbus/poller）。
-- `POST /cfg/reset`：清空設定後重啟裝置。
-- `GET /poller/config`：讀取 poller 設定。
-- `POST /poller/start`：啟用 poller（可同時提交 poller 設定）。
-- `POST /poller/stop`：停用 poller。
-- `GET /poller/status`：讀取輪詢執行狀態與最近通訊。
-- `POST /cmd`：文字指令入口（轉給 `Server_CMD.handle_cmd`）。
+- `GET /`：Web UI
+- `GET /wifi/scan`
+- `GET /wifi/status`
+- `POST /wifi/connect`
+- `POST /ap/enable`（對應 `REG20`）
+- `GET /cfg`
+- `POST /cfg`（UART `ch0/ch1` 欄位不接受直接更新，需走 `REG64`）
+- `POST /cfg/reset`（清空設定並重啟）
+- `POST /gateway/configure`（寫配置區 + 觸發 `REG64`）
+- `POST /system/save`（觸發 `REG60`）
+- `POST /system/reset`（觸發 `REG61`）
+- `GET /poller/config`
+- `POST /poller/start`
+- `POST /poller/stop`
+- `GET /poller/status`
+- `POST /cmd`
 
-## TCP 指令（Port 12345）
-- 每次連線收一筆命令即回覆並關閉連線（非長連線）。
-- 常用指令：
-  - `SYS STATUS` / `SYS WIFI [RESET]` / `SYS AP RESET` / `SYS PING` / `SYS HELP`
-  - `LED ON` / `LED OFF`
-  - `RS HEX <ch> <8 bytes>`
-  - `RS RECV <ch> [max]`
-- `MB ...` 指令目前為示範回覆，非 Gateway 主資料路徑。
+## Poller 行為
+- 設定來源：`config.poller`，最多 256 rows。
+- `interval_ms` 最小 50ms。
+- timeout 統一使用 `modbus.response_timeout_ms`。
+- 每次 `tick()` 只處理一列，完成後 `next_due = 完成時間 + interval`。
+- 回填區域主要為 100-355（依 row index 對應）。
 
 ## 預設設定重點
-- AP：`PicoSetup` / `pico1234`
+- AP：`PicoSetup` / `pico1234` / `enabled=true`
+- STA：空
 - Modbus：
   - `tcp_port=502`
   - `tcp_slave_id=1`
-  - `unit_map_ch0="1-127"`
-  - `unit_map_ch1=""`
-  - `ch0_enabled=False`
-  - `ch1_enabled=False`
-- Poller：`enabled=False`、`interval_ms=1000`
+  - `response_timeout_ms=1200`
+  - `tcp_rs485_mode="disabled"`
+  - `tcp_indirect_control=false`（相容欄位，由 `tcp_rs485_mode` 推導）
+  - `ch0_enabled=false`, `ch1_enabled=false`
+- Poller：`enabled=false`, `interval_ms=1000`
 
 ## 快速測試
-- 狀態：`curl http://192.168.4.1/wifi/status`
-- 指令：`echo 'SYS STATUS' | nc 192.168.4.1 12345`
-- RS485 HEX：`echo 'RS HEX 0 06 05 00 01 FF 00 A2 ED' | nc 192.168.4.1 12345`
-- Modbus TCP：連 `502`，依 Unit ID 測試本地 registers 或 RS485 轉送
+- `curl http://192.168.4.1/wifi/status`
+- `echo 'SYS STATUS' | nc 192.168.4.1 12345`
+- Modbus TCP client 連 `502` 測試：
+  - `Unit ID=tcp_slave_id`：讀寫本地 registers
+  - `Unit ID!=tcp_slave_id` + `REG3=ch0/ch1`：轉送 RS485
 
 ## 文件
 - 詳細手冊：`Project_Manual_zh.md`
+- 記憶體設計：`MEMORY_DESIGN_GUIDE.md`
+- 統一流程圖：`flowcharts.md`

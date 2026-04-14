@@ -65,6 +65,14 @@ class MDNSResponder:
             self._running = True
             self._thread = _thread.start_new_thread(self._loop, ())
             print("mDNS responder started for %s.local" % self.hostname)
+        except OSError as e:
+            # 5353 可能已被系統或其他服務占用；此情況下略過 mDNS 但不視為致命錯誤。
+            code = e.args[0] if getattr(e, "args", None) else None
+            if code == 98:
+                print("mDNS unavailable: port 5353 already in use")
+            else:
+                print("mDNS start failed:", e)
+            self.stop()
         except Exception as e:
             print("mDNS start failed:", e)
             self.stop()

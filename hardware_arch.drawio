@@ -5,81 +5,81 @@
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
 
-        <mxCell id="pico" value="Raspberry Pi Pico 2 W&#xa;Core0: TCP/HTTP/CMD&#xa;Core1: RS485 Poller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
-          <mxGeometry x="520" y="320" width="240" height="100" as="geometry"/>
+        <mxCell id="pico" value="Raspberry Pi Pico 2 W&#xa;Core0: CMD/HTTP/Modbus + REG60/61/62/64&#xa;Core1: RS485 Poller" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="520" y="320" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="ups" value="UPS/INA219 模組" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
-          <mxGeometry x="220" y="200" width="180" height="60" as="geometry"/>
+        <mxCell id="ups" value="UPS/INA219 模組" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="220" y="200" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="battery" value="電池" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="60" y="170" width="120" height="50" as="geometry"/>
+        <mxCell id="battery" value="電池" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="170" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="usb" value="USB/外部電源" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="60" y="240" width="140" height="50" as="geometry"/>
+        <mxCell id="usb" value="USB/外部電源" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="240" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="rs485" value="雙通道 RS485 模組" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
-          <mxGeometry x="520" y="470" width="240" height="70" as="geometry"/>
+        <mxCell id="rs485" value="雙通道 RS485 模組" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="520" y="470" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="dev0" value="RS485 裝置 CH0" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="840" y="450" width="180" height="50" as="geometry"/>
+        <mxCell id="dev0" value="RS485 裝置 CH0" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="450" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="dev1" value="RS485 裝置 CH1" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="840" y="520" width="180" height="50" as="geometry"/>
+        <mxCell id="dev1" value="RS485 裝置 CH1" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="520" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="wifi" value="Wi‑Fi (AP/STA)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
-          <mxGeometry x="520" y="160" width="240" height="60" as="geometry"/>
+        <mxCell id="wifi" value="Wi‑Fi (AP/STA + Captive DNS)" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="520" y="160" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="phone" value="手機/電腦" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="840" y="130" width="160" height="50" as="geometry"/>
+        <mxCell id="phone" value="手機/電腦" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="130" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="router" value="路由器/家用 Wi‑Fi" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="840" y="200" width="180" height="50" as="geometry"/>
+        <mxCell id="router" value="路由器/家用 Wi‑Fi" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="200" width="200" height="50" as="geometry"/>
         </mxCell>
 
         <!-- Power connections -->
-        <mxCell id="e1" value="供電" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="battery" target="ups">
+        <mxCell id="e1" value="供電" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="battery" target="ups">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e2" value="供電" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="usb" target="ups">
+        <mxCell id="e2" value="供電" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="usb" target="ups">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e3" value="電源輸出" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="ups" target="pico">
+        <mxCell id="e3" value="電源輸出" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="ups" target="pico">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
         <!-- I2C -->
-        <mxCell id="e4" value="I2C" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="pico" target="ups">
+        <mxCell id="e4" value="I2C" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="pico" target="ups">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
         <!-- RS485 -->
-        <mxCell id="e5" value="UART0/1 (共享鎖)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="pico" target="rs485">
+        <mxCell id="e5" value="UART0/1 (共享鎖)" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="pico" target="rs485">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e6" value="CH0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="rs485" target="dev0">
+        <mxCell id="e6" value="CH0" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="rs485" target="dev0">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e7" value="CH1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="rs485" target="dev1">
+        <mxCell id="e7" value="CH1" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="rs485" target="dev1">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
         <!-- Wi-Fi -->
-        <mxCell id="e8" value="AP" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="pico" target="wifi">
+        <mxCell id="e8" value="AP" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="pico" target="wifi">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e9" value="連線" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="wifi" target="phone">
+        <mxCell id="e9" value="連線" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="wifi" target="phone">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e10" value="STA" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="wifi" target="router">
+        <mxCell id="e10" value="STA" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="wifi" target="router">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 

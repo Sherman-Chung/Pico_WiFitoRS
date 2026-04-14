@@ -1,4 +1,4 @@
-# Gateway 系統整體流程圖（統一版）
+# Gateway 系統整體流程圖（程式現況）
 
 ```mermaid
 flowchart TD
@@ -6,133 +6,170 @@ flowchart TD
   %% ========================
   %% Main / Boot
   %% ========================
-  M1[開機 Boot] --> M2[讀取 config 與 開機自動開啟AP設定 ]
-  M2 --> M3{開機自動開啟AP設定 是否啟用?}
-  M3 -->|Yes| M4[先啟 AP + Captive DNS + HTTP TCP Modbus + mDNS]
-  M3 -->|No| M5[先略過 AP 與服務啟動]
-  M4 --> M6[若有保存 STA 則嘗試連線]
-  M5 --> M6
-  M6 --> M7[執行系統檢查 UPS + RS485]
-  M7 --> M8{檢查通過?}
-  M8 -->|No| M9[fail_halt LED 閃爍停機]
-  M8 -->|Yes| M10[若 AP 未啟動則補啟 AP + DNS]
-  M10 --> M11[若服務未啟動則補啟 HTTP TCP Modbus + mDNS]
-  M11 --> M11A[啟動 Core1 Poller Worker]
-  M11A --> M12[Core0 主迴圈]
-  M12 --> M13[poll_cmd_server]
-  M13 --> M14[poll_http_server]
-  M14 --> M15[Modbus TCP 事件式處理]
-  M15 --> M17[sleep 20ms]
-  M17 --> M12
-  M11A --> M16[Core1 定時輪詢調度引擎]
-  M16 --> M16A[sleep 5ms]
-  M16A --> M16
+  M1[開機 Boot] --> M2[讀取 config]
+  M2 --> M2A[初始化 Hold Register 512]
+  M2A --> M3{有保存 STA 嗎}
+  M3 -->|Yes| M4[嘗試連接 STA timeout 6s]
+  M3 -->|No| M5[略過 STA 連線]
+  M4 --> M6{STA 連線成功}
+  M6 -->|Yes| M7[讀 REG20 AP Enable]
+  M6 -->|No| M7
+  M5 --> M7
+
+  M7 --> M8{AP Enable REG20 = 1}
+  M8 -->|Yes| M9[啟動 AP + Captive DNS]
+  M8 -->|No 且 STA成功| M10[不啟 AP]
+  M8 -->|No 且 STA失敗| M11[強制啟 AP + 回寫 REG20=1]
+
+  M9 --> M12[啟動服務 HTTP + ModbusTCP + CMDTCP + mDNS]
+  M10 --> M12
+  M11 --> M12
+  M12 --> M13[等待網路穩定]
+  M13 --> M14[系統檢查 UPS + RS485]
+  M14 --> M15{檢查通過}
+  M15 -->|No| M16[fail_halt LED 閃爍停機]
+  M15 -->|Yes| M17{REG21 Poller Enable}
+
+  M17 -->|1| M18[啟 Core1 Poller Worker]
+  M17 -->|0| M19[Poller 關閉]
+
+  M18 --> M20[Core0 主迴圈]
+  M19 --> M20
+  M20 --> M21[poll_cmd_server]
+  M21 --> M22[poll_http_server]
+  M22 --> M23[poll_modbus_tcp_server]
+  M23 --> M24[更新狀態寄存器 50-56]
+  M24 --> M25[檢查命令 REG60/61/62/64]
+  M25 --> M26[sleep 20ms]
+  M26 --> M20
+
+  M18 --> M27[Core1: poller_tick]
+  M27 --> M28[sleep 5ms]
+  M28 --> M27
 
   %% ========================
   %% HTTP Server
   %% ========================
-  H1[HTTP poll] --> H2{accept client?}
+  H1[HTTP poll] --> H2{accept client}
   H2 -->|No| H3[return]
-  H2 -->|Yes| H4[讀 Header Body 並解析 method path]
-  H4 --> H5{請求分流判定}
+  H2 -->|Yes| H4[解析 method/path/body]
+  H4 --> H5{路由分流}
+
   H5 -->|GET /| H6[回 Web UI]
-  H5 -->|GET /wifi/scan| H7[掃描 AP 清單 JSON]
-  H5 -->|GET /wifi/status| H8[回 STA AP 電源資訊 JSON]
-  H5 -->|POST /wifi/connect| H9[連線 STA 可選 save]
-  H5 -->|GET /cfg| H10[回完整設定]
-  H5 -->|POST /cfg| H11[更新設定 AP 設定可即時套用]
-  H5 -->|POST /cfg/reset| H12[reset_config 後 machine.reset]
-  H5 -->|GET /poller/config| H13[回 Poller 設定]
-  H5 -->|POST /poller/start| H14[更新 enabled true 並 set_enabled true]
-  H5 -->|POST /poller/stop| H15[更新 enabled false 並 set_enabled false]
-  H5 -->|GET /poller/status| H16[回 Poller 執行狀態]
-  H5 -->|POST /cmd| H17[委派 Server_CMD.handle_cmd]
-  H5 -->|favicon/apple-touch-icon| H18[回 204]
-  H5 -->|其他路徑| H19[Fallback 回主頁]
-  H6 --> H20[送回應並關閉 client]
-  H7 --> H20
-  H8 --> H20
-  H9 --> H20
-  H10 --> H20
-  H11 --> H20
-  H12 --> H20
-  H13 --> H20
-  H14 --> H20
-  H15 --> H20
-  H16 --> H20
-  H17 --> H20
-  H18 --> H20
-  H19 --> H20
+  H5 -->|GET /wifi/scan| H7[掃描 AP JSON]
+  H5 -->|GET /wifi/status| H8[回 STA AP REG20 REG56 電源]
+  H5 -->|POST /wifi/connect| H9[連線 STA]
+  H5 -->|POST /ap/enable| H10[寫 REG20 並啟停 AP]
+
+  H5 -->|GET /cfg| H11[回完整設定]
+  H5 -->|POST /cfg| H12[更新 RAM 設定]
+  H5 -->|POST /gateway/configure| H13[寫 REG0-16 + 觸發 REG64]
+  H5 -->|POST /system/save| H14[觸發 REG60]
+  H5 -->|POST /system/reset| H15[觸發 REG61]
+  H5 -->|POST /cfg/reset| H16[reset_config + reboot]
+
+  H5 -->|GET /poller/config| H17[回 Poller 設定]
+  H5 -->|POST /poller/start| H18[啟用 Poller]
+  H5 -->|POST /poller/stop| H19[停用 Poller]
+  H5 -->|GET /poller/status| H20[回 Poller 狀態]
+  H5 -->|POST /cmd| H21[委派 Server_CMD.handle_cmd]
+  H5 -->|favicon/apple-touch-icon| H22[204]
+  H5 -->|其他| H23[Fallback 回首頁]
+
+  H6 --> H24[送回應關閉 client]
+  H7 --> H24
+  H8 --> H24
+  H9 --> H24
+  H10 --> H24
+  H11 --> H24
+  H12 --> H24
+  H13 --> H24
+  H14 --> H24
+  H15 --> H24
+  H16 --> H24
+  H17 --> H24
+  H18 --> H24
+  H19 --> H24
+  H20 --> H24
+  H21 --> H24
+  H22 --> H24
+  H23 --> H24
 
   %% ========================
   %% Modbus TCP Gateway
   %% ========================
-  B1[Modbus poll] --> B2{已有活動 client?}
-  B2 -->|No| B2A{accept client?}
+  B1[Modbus poll] --> B2{有活動 client}
+  B2 -->|No| B2A{accept client}
   B2A -->|No| B3[return]
-  B2A -->|Yes| B4[建立活動連線狀態]
+  B2A -->|Yes| B4[建立活動連線]
   B2 -->|Yes| B5[非阻塞 recv 到 buffer]
   B4 --> B5
-  B5 --> B6{buffer 有完整 MBAP+PDU?}
+  B5 --> B6{buffer 有完整 MBAP+PDU}
   B6 -->|No| B3
-  B6 -->|Yes| B8[讀 modbus config timeout tcp_slave_id]
-  B8 --> B9{識別碼比對（本地/路由）}
-  B9 -->|Yes| B10{Func 03/04 且範圍合法?}
-  B10 -->|Yes| B11[回本地 registers]
-  B10 -->|No| B12[回 exception 0x01 或 0x02]
+
+  B6 -->|Yes| B7[讀 cfg timeout tcp_slave_id REG3]
+  B7 --> B8{Unit ID == tcp_slave_id}
+
+  B8 -->|Yes| B9[本地寄存器 FC03/04/06/16]
+  B9 --> B5
+
+  B8 -->|No| B10{REG3 == disabled}
+  B10 -->|Yes| B11[回 exception 0x03]
   B11 --> B5
-  B12 --> B5
-  B9 -->|No| B13[unit map 對應 CH0 CH1]
-  B13 --> B14{有可用通道?}
-  B14 -->|No| B15[回 exception 0x0B]
-  B15 --> B5
-  B14 -->|Yes| B16{取得 RS485 鎖?}
-  B16 -->|No| B17[回 exception 0x06]
-  B17 --> B5
-  B16 -->|Yes| B18[依 RTU/ASCII 組包送出並等回覆]
-  B18 --> B19{回覆可解析?}
-  B19 -->|No| B20[回 exception 0x0B]
-  B20 --> B21[釋放鎖]
-  B21 --> B5
-  B19 -->|Yes| B22[封裝 MBAP 回覆]
-  B22 --> B21
-  B22 --> B5
+
+  B10 -->|No| B12[REG3 決定通道 ch0/ch1]
+  B12 --> B13{目標通道啟用}
+  B13 -->|No| B14[回 exception 0x0B]
+  B14 --> B5
+
+  B13 -->|Yes| B15{取得 RS485 鎖}
+  B15 -->|No| B16[回 exception 0x06]
+  B16 --> B5
+
+  B15 -->|Yes| B17[依 RTU/ASCII 組包送出]
+  B17 --> B18{回覆可解析}
+  B18 -->|No| B19[回 exception 0x0B]
+  B19 --> B20[釋放鎖]
+  B20 --> B5
+  B18 -->|Yes| B21[封裝 MBAP 回覆]
+  B21 --> B20
 
   %% ========================
   %% Poller
   %% ========================
-  P1[定時輪詢調度引擎] --> P2[讀 poller config]
-  P2 --> P3{enabled 或 force_enabled?}
+  P1[poller.tick] --> P2[讀 poller config + timeout]
+  P2 --> P3{enabled 或 force_enabled}
   P3 -->|No| P4[return]
-  P3 -->|Yes| P5{到達 interval?}
-  P5 -->|No| P6[return]
-  P5 -->|Yes| P7{rows 是否存在?}
-  P7 -->|No| P8[return]
-  P7 -->|Yes| P9[取下一列並解析 ch station cmd reg data]
-  P9 --> P10{列格式合法?}
-  P10 -->|No| P11[Return = BAD ROW]
-  P11 --> P4
-  P10 -->|Yes| P12{取得 RS485 鎖?}
-  P12 -->|No| P13[Return = BUSY]
-  P13 --> P4
-  P12 -->|Yes| P14{通道啟用?}
-  P14 -->|No| P15[Return = DISABLED]
-  P15 --> P16[釋放鎖]
-  P16 --> P4
-  P14 -->|Yes| P17[組 RTU/ASCII frame 送出並收回覆]
-  P17 --> P18{回覆有效且站號一致?}
-  P18 -->|No| P19[Return = TIMEOUT BAD CRC 或 STA MISMATCH]
-  P19 --> P16
-  P18 -->|Yes| P20[解析回覆並更新本地 registers]
-  P20 --> P21[更新 Return 與最近通訊狀態]
-  P21 --> P16
-  P16 --> P22[設定 next_due = 本筆完成 + interval]
-  P22 --> P4
+  P3 -->|Yes| P5{到達 next_due}
+  P5 -->|No| P4
+  P5 -->|Yes| P6{rows 存在}
+  P6 -->|No| P4
 
-  %% ========================
+  P6 -->|Yes| P7[取下一列並解析]
+  P7 --> P8{列格式合法}
+  P8 -->|No| P9[Return=BAD ROW]
+  P9 --> P4
+
+  P8 -->|Yes| P10{取得通道鎖}
+  P10 -->|No| P11[Return=BUSY]
+  P11 --> P4
+
+  P10 -->|Yes| P12{通道啟用}
+  P12 -->|No| P13[Return=DISABLED]
+  P13 --> P14[釋放鎖]
+  P14 --> P4
+
+  P12 -->|Yes| P15[組 RTU/ASCII + 收回覆]
+  P15 --> P16{回覆合法且站號一致}
+  P16 -->|No| P17[Return=TIMEOUT/BAD CRC/STA MISMATCH]
+  P17 --> P14
+  P16 -->|Yes| P18[更新結果與本地 registers]
+  P18 --> P14
+  P14 --> P19[next_due = 結束時間 + interval]
+  P19 --> P4
+
   %% Integration
-  %% ========================
-  M14 -.call.-> H1
-  M15 -.call.-> B1
-  M16 -.call.-> P1
+  M22 -.call.-> H1
+  M23 -.call.-> B1
+  M18 -.call.-> P1
 ```

@@ -19,13 +19,15 @@ _CFG_PATH = "config_store.json"
 def _default_config():
     """專案完整預設設定（作為 schema baseline）。"""
     return {
-        "ap": {"ssid": "PicoSetup", "password": "pico1234"},
+        "ap": {"ssid": "PicoSetup", "password": "pico1234", "enabled": True},
         "sta": {"ssid": "", "password": ""},
         "poller": {"enabled": False, "interval_ms": 1000, "rows": []},
         "modbus": {
             "tcp_port": 502,
             "response_timeout_ms": 1200,
             "tcp_slave_id": 1,
+            "tcp_rs485_mode": "disabled",
+            "tcp_indirect_control": False,
             "unit_map_ch0": "1-127",
             "unit_map_ch1": "",
             "ch0_enabled": False,
@@ -105,7 +107,8 @@ def _sanitize_ap(ap):
         return None, "ssid required"
     if password and len(password) < 8:
         return None, "password must be >= 8 chars or empty"
-    return {"ssid": ssid, "password": password}, None
+    enabled = _parse_bool(ap.get("enabled", True))
+    return {"ssid": ssid, "password": password, "enabled": enabled}, None
 
 
 # =============== STA 設定驗證 ===============
@@ -175,6 +178,13 @@ def _sanitize_modbus(modbus):
         return None, "tcp_slave_id range 1-247"
     out["unit_map_ch0"] = (modbus.get("unit_map_ch0") or "1-127").strip()
     out["unit_map_ch1"] = (modbus.get("unit_map_ch1") or "").strip()
+    tcp_rs485_mode = (modbus.get("tcp_rs485_mode") or "").strip().lower()
+    if not tcp_rs485_mode:
+        tcp_rs485_mode = "ch0" if _parse_bool(modbus.get("tcp_indirect_control", False)) else "disabled"
+    if tcp_rs485_mode not in ("disabled", "ch0", "ch1"):
+        return None, "tcp_rs485_mode must be disabled/ch0/ch1"
+    out["tcp_rs485_mode"] = tcp_rs485_mode
+    out["tcp_indirect_control"] = (tcp_rs485_mode != "disabled")
     out["ch0_enabled"] = _parse_bool(modbus.get("ch0_enabled", True))
     out["ch1_enabled"] = _parse_bool(modbus.get("ch1_enabled", True))
     ch0, err = _sanitize_ch(modbus.get("ch0") or {})
@@ -208,13 +218,14 @@ def _parse_bool(val):
 # =============== 設定更新與持久化 ===============
 # 說明：
 # 套用 patch、執行欄位驗證、寫回檔案並更新快取。
-def update_config(patch):
+def update_config(patch, persist: bool = False):
     """
-    套用 patch 並保存設定。
+    套用 patch 到執行中設定。
 
     回傳：(ok, error, cfg)
-    - ok=True 代表已寫入並更新快取
+    - ok=True 代表已更新快取
     - ok=False 時 cfg 為舊設定
+    persist=True 時才會寫入 Flash（config_store.json）
     """
     global _cache
     cfg = get_config()
@@ -247,13 +258,18 @@ def update_config(patch):
             return False, err, cfg
         new_cfg["poller"] = poller
 
+    if not persist:
+        _cache = new_cfg
+        return True, None, new_cfg
+
     try:
         with open(_CFG_PATH, "w") as f:
             json.dump(new_cfg, f)
-        _cache = new_cfg
-        return True, None, new_cfg
     except Exception as e:
         return False, str(e), cfg
+
+    _cache = new_cfg
+    return True, None, new_cfg
 
 
 # =============== 設定重置 ===============

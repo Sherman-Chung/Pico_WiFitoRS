@@ -16,13 +16,65 @@ from wifi_Scan_Connect import (
     connect_to_ap,
     read_status,
     apply_ap_config,
+    stop_config_ap,
 )
 from config_store import get_config, update_config, reset_config
 from Pico_UPS import read_battery, power_source_text
+import register_store
 
 HTTP_PORT = 80
 http_sock = None
 _cmd_handler = default_handler
+
+
+def _is_sock_timeout(err: Exception) -> bool:
+    """判斷是否為 socket timeout/暫時無資料。"""
+    code = None
+    try:
+        if getattr(err, "args", None):
+            code = err.args[0]
+    except Exception:
+        code = None
+    return code in (11, 35, 110, 116, 119)
+
+
+def _stage_gateway_modbus_to_registers(modbus: dict):
+    """
+    將 Gateway 頁面的 Modbus/UART 參數寫入 Hold Register 配置區。
+    只寫入暫存記憶體，不直接更新 config_store。
+    """
+    mb = modbus or {}
+    ch0 = mb.get("ch0") or {}
+    ch1 = mb.get("ch1") or {}
+    tcp_rs485_mode = (mb.get("tcp_rs485_mode") or "").strip().lower()
+    if tcp_rs485_mode not in ("disabled", "ch0", "ch1"):
+        tcp_rs485_mode = "ch0" if bool(mb.get("tcp_indirect_control", False)) else "disabled"
+
+    writes = [
+        (0, 502),  # UI 固定 502
+        (1, int(mb.get("tcp_slave_id") or 1)),
+        (2, int(mb.get("response_timeout_ms") or 1200) // 10),
+        (3, tcp_rs485_mode),
+        (5, 1 if bool(mb.get("ch0_enabled", True)) else 0),
+        (6, ch0.get("mode") or "rtu"),
+        (7, int(ch0.get("baudrate") or 9600)),
+        (8, ch0.get("parity") or "N"),
+        (9, int(ch0.get("stopbits") or 1)),
+        (10, int(ch0.get("bits") or 8)),
+        (11, 1 if bool(mb.get("ch1_enabled", True)) else 0),
+        (12, ch1.get("mode") or "rtu"),
+        (13, int(ch1.get("baudrate") or 9600)),
+        (14, ch1.get("parity") or "N"),
+        (15, int(ch1.get("stopbits") or 1)),
+        (16, int(ch1.get("bits") or 8)),
+    ]
+
+    for reg_idx, value in writes:
+        ok, err = register_store.set_reg(reg_idx, value, encode=True)
+        if not ok:
+            return False, "REG%d: %s" % (reg_idx, err or "write failed")
+
+    return True, None
 
 # 網頁內容與原本 main.py 相同，便於手機/瀏覽器遠端操控
 WEB_PAGE = """<!DOCTYPE html>
@@ -118,6 +170,27 @@ WEB_PAGE = """<!DOCTYPE html>
     box-sizing: border-box;
     background: #fbfbfd;
     color: var(--ink);
+  }
+  input[type="checkbox"] {
+    width: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+  .checkline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0;
+    line-height: 1.35;
+    cursor: pointer;
+  }
+  .checkline input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    flex: 0 0 18px;
   }
   select {
     background: linear-gradient(180deg, #f7f8fb 0%, #eceff4 100%);
@@ -248,14 +321,25 @@ WEB_PAGE = """<!DOCTYPE html>
       </div>
       <div class="row" style="margin-top:10px;">
         <div>
-          <label>
+          <label>TCP 轉送模式（REG3）</label>
+          <select id="tcp-rs485-mode" class="gw-field">
+            <option value="disabled">disabled（TCP→Register Map）</option>
+            <option value="ch0">ch0（TCP→RS485 CH0）</option>
+            <option value="ch1">ch1（TCP→RS485 CH1）</option>
+          </select>
+        </div>
+        <div></div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div>
+          <label class="checkline">
             <!-- 啟用/停用 CH0 -->
             <input type="checkbox" id="ch0-enabled" class="gw-field" checked />
             啟用 CH0
           </label>
         </div>
         <div>
-          <label>
+          <label class="checkline">
             <!-- 啟用/停用 CH1 -->
             <input type="checkbox" id="ch1-enabled" class="gw-field" checked />
             啟用 CH1
@@ -275,7 +359,13 @@ WEB_PAGE = """<!DOCTYPE html>
           </select>
           <!-- CH0 通訊速率 -->
           <label>Baudrate</label>
-          <input id="ch0-baud" class="gw-field" type="number" value="9600" />
+          <select id="ch0-baud" class="gw-field">
+            <option value="2400">2400</option>
+            <option value="4800">4800</option>
+            <option value="9600">9600</option>
+            <option value="38400">38400</option>
+            <option value="115200">115200</option>
+          </select>
           <!-- CH0 Parity -->
           <label>Parity</label>
           <select id="ch0-parity" class="gw-field">
@@ -306,7 +396,13 @@ WEB_PAGE = """<!DOCTYPE html>
           </select>
           <!-- CH1 通訊速率 -->
           <label>Baudrate</label>
-          <input id="ch1-baud" class="gw-field" type="number" value="9600" />
+          <select id="ch1-baud" class="gw-field">
+            <option value="2400">2400</option>
+            <option value="4800">4800</option>
+            <option value="9600">9600</option>
+            <option value="38400">38400</option>
+            <option value="115200">115200</option>
+          </select>
           <!-- CH1 Parity -->
           <label>Parity</label>
           <select id="ch1-parity" class="gw-field">
@@ -330,8 +426,8 @@ WEB_PAGE = """<!DOCTYPE html>
       </div>
 
       <div class="btn-row">
-        <!-- 儲存 Gateway 設定 -->
-        <button id="btn-save-config" type="button" onclick="saveConfig()">儲存設定</button>
+        <!-- 設定 Gateway（透過 REG64 套用） -->
+        <button id="btn-save-config" type="button" onclick="saveConfig()">設定</button>
         <!-- 重新從裝置載入設定 -->
         <button type="button" class="ghost" onclick="loadConfig()">重新載入</button>
       </div>
@@ -354,6 +450,15 @@ WEB_PAGE = """<!DOCTYPE html>
           <input id="ap-pwd" type="text" />
         </div>
       </div>
+      <div class="row" style="margin-top:8px;">
+        <div>
+          <label class="checkline">
+            <input type="checkbox" id="ap-enable" onchange="setApEnable()" />
+            AP Enable
+          </label>
+        </div>
+        <div></div>
+      </div>
       <div class="btn-row">
         <!-- 更新 AP 設定 -->
         <button onclick="saveAp()">更新 AP 設定</button>
@@ -362,6 +467,7 @@ WEB_PAGE = """<!DOCTYPE html>
       </div>
       <!-- STA/AP 狀態 -->
       <div id="wifi-status" class="note"></div>
+      <div id="cfg-msg" class="note"></div>
 
       <div style="margin-top:12px;">
         <div class="note">Infrastructure 連線（選擇要連的路由器）</div>
@@ -377,10 +483,10 @@ WEB_PAGE = """<!DOCTYPE html>
         <!-- STA 密碼 -->
         <label>密碼（若為開放網路可留空）</label>
         <input type="text" id="wifi-psk" placeholder="Wi-Fi Password" />
-        <label style="margin-top:6px;">
-          <!-- 是否保存 STA 設定 -->
+        <label class="checkline" style="margin-top:6px;">
+          <!-- 是否套用 STA 設定 -->
           <input type="checkbox" id="wifi-save" checked />
-          連線成功後保存 STA 設定
+          連線成功後套用 STA 設定
         </label>
         <div class="btn-row">
           <!-- 執行 STA 連線 -->
@@ -448,8 +554,8 @@ WEB_PAGE = """<!DOCTYPE html>
           <button class="secondary" onclick="pollStart()">啟動</button>
           <!-- 停止輪詢 -->
           <button class="ghost" onclick="pollStop()">停止</button>
-          <!-- 儲存輪詢表格 -->
-          <button onclick="savePoller()">儲存表格</button>
+          <!-- 套用輪詢表格（落盤需 REG60） -->
+          <button onclick="savePoller()">套用表格</button>
         </div>
       </div>
       <!-- 輪詢狀態 -->
@@ -488,14 +594,17 @@ WEB_PAGE = """<!DOCTYPE html>
       <div id="log" class="log"></div>
     </div>
 
-    <!-- System Reset -->
+    <!-- System -->
     <div class="card span-2">
-      <h2>System Reset</h2>
-      <div class="note">清空所有設定並重啟裝置。</div>
+      <h2>System</h2>
+      <div class="note">所有設定先只保存在 RAM；按下「存入 Flash（REG60）」才會在重啟後保留。</div>
       <div class="btn-row">
-        <!-- 清空設定 + 重啟 -->
-        <button class="danger" onclick="resetSystem()">System Reset</button>
+        <!-- 寫入 Flash -->
+        <button onclick="saveSystemConfig()">存入 Flash（REG60）</button>
+        <!-- 系統重置 -->
+        <button class="danger" onclick="resetSystemByReg()">System Reset（REG61）</button>
       </div>
+      <div id="system-msg" class="note"></div>
     </div>
   </div>
 </div>
@@ -626,7 +735,15 @@ WEB_PAGE = """<!DOCTYPE html>
         var mb = d.modbus || {};
         document.getElementById('mb-timeout').value = mb.response_timeout_ms || 1200;
         document.getElementById('tcp-slave-id').value = mb.tcp_slave_id || 1;
-        document.getElementById('gw-status').textContent = '已儲存';
+        var tcpRs485Mode = (mb.tcp_rs485_mode || '').toLowerCase();
+        if (!tcpRs485Mode) {
+          tcpRs485Mode = (mb.tcp_indirect_control === true) ? 'ch0' : 'disabled';
+        }
+        if (['disabled', 'ch0', 'ch1'].indexOf(tcpRs485Mode) < 0) {
+          tcpRs485Mode = 'disabled';
+        }
+        document.getElementById('tcp-rs485-mode').value = tcpRs485Mode;
+        document.getElementById('gw-status').textContent = '已套用';
         document.getElementById('ch0-enabled').checked = mb.ch0_enabled !== false;
         document.getElementById('ch1-enabled').checked = mb.ch1_enabled !== false;
         var ch0 = mb.ch0 || {};
@@ -644,9 +761,10 @@ WEB_PAGE = """<!DOCTYPE html>
         var ap = d.ap || {};
         document.getElementById('ap-ssid').value = ap.ssid || 'PicoSetup';
         document.getElementById('ap-pwd').value = ap.password || '';
+        document.getElementById('ap-enable').checked = ap.enabled !== false;
         var sta = d.sta || {};
         if (sta.ssid) {
-          document.getElementById('wifi-msg').textContent = '已保存 STA：' + sta.ssid;
+          document.getElementById('wifi-msg').textContent = '目前 STA：' + sta.ssid;
         }
         updateChannelUi();
         if (d.poller) {
@@ -750,10 +868,10 @@ WEB_PAGE = """<!DOCTYPE html>
     })
       .then(r => r.json())
       .then(d => {
-        document.getElementById('poll-status').textContent = d.ok ? '已儲存' : ('儲存失敗：' + (d.error || 'unknown'));
+        document.getElementById('poll-status').textContent = d.ok ? '已套用（未寫入 Flash）' : ('套用失敗：' + (d.error || 'unknown'));
       })
       .catch(() => {
-        document.getElementById('poll-status').textContent = '儲存失敗';
+        document.getElementById('poll-status').textContent = '套用失敗';
       });
   }
 
@@ -827,6 +945,7 @@ WEB_PAGE = """<!DOCTYPE html>
         tcp_port: 502,
         response_timeout_ms: Number(document.getElementById('mb-timeout').value || 1200),
         tcp_slave_id: Number(document.getElementById('tcp-slave-id').value || 1),
+        tcp_rs485_mode: document.getElementById('tcp-rs485-mode').value,
         ch0: {
           mode: document.getElementById('ch0-mode').value,
           baudrate: Number(document.getElementById('ch0-baud').value || 9600),
@@ -841,12 +960,13 @@ WEB_PAGE = """<!DOCTYPE html>
           stopbits: Number(document.getElementById('ch1-stop').value || 1),
           bits: Number(document.getElementById('ch1-bits').value || 8)
         },
+        tcp_indirect_control: document.getElementById('tcp-rs485-mode').value !== 'disabled',
         ch0_enabled: document.getElementById('ch0-enabled').checked,
         ch1_enabled: document.getElementById('ch1-enabled').checked
       }
     };
-    document.getElementById('gw-status').textContent = '儲存中...';
-    fetch('/cfg', {
+    document.getElementById('gw-status').textContent = '設定中...';
+    fetch('/gateway/configure', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -854,17 +974,15 @@ WEB_PAGE = """<!DOCTYPE html>
       .then(r => r.json())
       .then(d => {
         if (d.ok) {
-          var now = new Date();
-          var ts = now.toLocaleTimeString();
-          document.getElementById('gw-status').textContent = '已儲存 (' + ts + ')';
-          loadConfig();
+          document.getElementById('gw-status').textContent = '已觸發設定（REG64）';
+          setTimeout(loadConfig, 300);
         } else {
-          document.getElementById('gw-status').textContent = '儲存失敗';
+          document.getElementById('gw-status').textContent = '設定失敗：' + (d.error || 'unknown');
         }
         updateChannelUi();
       })
       .catch(() => {
-        document.getElementById('gw-status').textContent = '儲存失敗';
+        document.getElementById('gw-status').textContent = '設定失敗';
       });
   }
 
@@ -912,13 +1030,13 @@ WEB_PAGE = """<!DOCTYPE html>
 
   document.addEventListener('input', function(ev) {
     if (ev.target && ev.target.classList && ev.target.classList.contains('gw-field')) {
-      document.getElementById('gw-status').textContent = '請儲存設定';
+      document.getElementById('gw-status').textContent = '請按設定';
     }
   });
 
   document.addEventListener('change', function(ev) {
     if (ev.target && ev.target.classList && ev.target.classList.contains('gw-field')) {
-      document.getElementById('gw-status').textContent = '請儲存設定';
+      document.getElementById('gw-status').textContent = '請按設定';
     }
   });
 
@@ -926,7 +1044,8 @@ WEB_PAGE = """<!DOCTYPE html>
     var payload = {
       ap: {
         ssid: document.getElementById('ap-ssid').value,
-        password: document.getElementById('ap-pwd').value
+        password: document.getElementById('ap-pwd').value,
+        enabled: document.getElementById('ap-enable').checked
       }
     };
     fetch('/cfg', {
@@ -944,6 +1063,23 @@ WEB_PAGE = """<!DOCTYPE html>
       });
   }
 
+  function setApEnable() {
+    var enabled = document.getElementById('ap-enable').checked;
+    fetch('/ap/enable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: enabled })
+    })
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('cfg-msg').textContent = d.ok ? ('AP Enable 已' + (enabled ? '開啟' : '關閉')) : ('AP Enable 更新失敗：' + (d.error || 'unknown'));
+        refreshStatus();
+      })
+      .catch(() => {
+        document.getElementById('cfg-msg').textContent = 'AP Enable 更新失敗';
+      });
+  }
+
   function refreshStatus() {
     fetch('/wifi/status')
       .then(r => r.json())
@@ -951,7 +1087,12 @@ WEB_PAGE = """<!DOCTYPE html>
         var txt = [];
         txt.push('STA connected: ' + d.connected + (d.ip ? ' / IP ' + d.ip : ''));
         if (d.rssi !== null && d.rssi !== undefined) txt.push('RSSI ' + d.rssi + ' dBm');
-        txt.push('AP active: ' + d.ap_active + (d.ap_essid ? ' (' + d.ap_essid + ')' : ''));
+        var apEnable = (d.ap_enable_reg === 1 || d.ap_enable_reg === true);
+        var apActive = (d.ap_active_reg === 1 || d.ap_active_reg === true);
+        txt.push('AP enable: ' + apEnable);
+        txt.push('AP active: ' + apActive + (d.ap_essid ? ' (' + d.ap_essid + ')' : ''));
+        var apEnableEl = document.getElementById('ap-enable');
+        if (apEnableEl) apEnableEl.checked = apEnable;
         if (d.power) {
           var pwr = d.power;
           if (pwr === 'external') pwr = '外部供電';
@@ -1005,7 +1146,7 @@ WEB_PAGE = """<!DOCTYPE html>
       .then(r => r.json())
       .then(d => {
         if (d.ok) {
-          msg.textContent = '連線成功，IP: ' + (d.ip || '(取得中)') + (d.saved ? '（已保存）' : '');
+          msg.textContent = '連線成功，IP: ' + (d.ip || '(取得中)') + (d.saved ? '（已套用，未寫入 Flash）' : '');
         } else {
           msg.textContent = '連線失敗：' + (d.error || 'unknown');
         }
@@ -1013,8 +1154,13 @@ WEB_PAGE = """<!DOCTYPE html>
           var txt = [];
           txt.push('STA connected: ' + d.connected + (d.ip ? ' / IP ' + d.ip : ''));
           if (d.rssi !== null && d.rssi !== undefined) txt.push('RSSI ' + d.rssi + ' dBm');
-          txt.push('AP active: ' + d.ap_active + (d.ap_essid ? ' (' + d.ap_essid + ')' : ''));
+          var apEnable = (d.ap_enable_reg === 1 || d.ap_enable_reg === true);
+          var apActive = (d.ap_active_reg === 1 || d.ap_active_reg === true);
+          txt.push('AP enable: ' + apEnable);
+          txt.push('AP active: ' + apActive + (d.ap_essid ? ' (' + d.ap_essid + ')' : ''));
           document.getElementById('wifi-status').textContent = txt.join(' | ');
+          var apEnableEl = document.getElementById('ap-enable');
+          if (apEnableEl) apEnableEl.checked = apEnable;
         } else {
           refreshStatus();
         }
@@ -1025,15 +1171,30 @@ WEB_PAGE = """<!DOCTYPE html>
       });
   }
 
-  function resetSystem() {
-    if (!confirm('確認清空所有設定並重啟？')) return;
-    fetch('/cfg/reset', { method: 'POST' })
+  function saveSystemConfig() {
+    var msg = document.getElementById('system-msg');
+    msg.textContent = '送出 REG60 中...';
+    fetch('/system/save', { method: 'POST' })
       .then(r => r.json())
       .then(d => {
-        document.getElementById('cfg-msg').textContent = d.ok ? '重啟中...' : ('Reset 失敗：' + (d.error || 'unknown'));
+        msg.textContent = d.ok ? '已觸發 REG60，配置將寫入 Flash' : ('REG60 觸發失敗：' + (d.error || 'unknown'));
       })
       .catch(() => {
-        document.getElementById('cfg-msg').textContent = 'Reset 失敗';
+        msg.textContent = 'REG60 觸發失敗';
+      });
+  }
+
+  function resetSystemByReg() {
+    if (!confirm('確認執行 System Reset（REG61）？')) return;
+    var msg = document.getElementById('system-msg');
+    msg.textContent = '送出 REG61 中...';
+    fetch('/system/reset', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => {
+        msg.textContent = d.ok ? '已觸發 REG61，系統即將重置' : ('REG61 觸發失敗：' + (d.error || 'unknown'));
+      })
+      .catch(() => {
+        msg.textContent = 'REG61 觸發失敗';
       });
   }
 </script>
@@ -1101,7 +1262,8 @@ def poll_http_server():
             try:
                 chunk = cl.recv(512)
             except OSError as e:
-                print("HTTP recv header error:", e)
+                if not _is_sock_timeout(e):
+                    print("HTTP recv header error:", e)
                 return
             if not chunk:
                 break
@@ -1150,7 +1312,8 @@ def poll_http_server():
                 try:
                     chunk = cl.recv(512)
                 except OSError as e:
-                    print("HTTP recv body error:", e)
+                    if not _is_sock_timeout(e):
+                        print("HTTP recv body error:", e)
                     break
                 if not chunk:
                     break
@@ -1223,6 +1386,8 @@ def poll_http_server():
                     "rssi": st.get("rssi"),
                     "ap_active": st.get("ap_active", False),
                     "ap_essid": st.get("ap_essid", ""),
+                    "ap_enable_reg": register_store.get_regs(20, 1, decode=False)[0],
+                    "ap_active_reg": register_store.get_regs(56, 1, decode=False)[0],
                     "power": pwr,
                     "batt_p": batt_p,
                 }
@@ -1261,6 +1426,8 @@ def poll_http_server():
                 "rssi": st.get("rssi"),
                 "ap_active": st.get("ap_active", False),
                 "ap_essid": st.get("ap_essid", ""),
+                "ap_enable_reg": register_store.get_regs(20, 1, decode=False)[0],
+                "ap_active_reg": register_store.get_regs(56, 1, decode=False)[0],
             }
             if ok:
                 saved = False
@@ -1274,6 +1441,34 @@ def poll_http_server():
                 resp = {"ok": False, "error": "connect failed"}
                 resp.update(status_payload)
                 send_json(resp)
+            return
+
+        if method == "POST" and path == "/ap/enable":
+            payload = {}
+            try:
+                payload = json.loads(body or b"{}")
+            except Exception:
+                payload = {}
+            enabled = bool(payload.get("enabled"))
+            ok, err = register_store.set_reg(20, 1 if enabled else 0, encode=False)
+            if not ok:
+                send_json({"ok": False, "error": err or "set REG20 failed"}, status="500 Internal Server Error")
+                return
+            ap_cfg = (get_config().get("ap") or {})
+            update_config(
+                {
+                    "ap": {
+                        "ssid": ap_cfg.get("ssid") or "PicoSetup",
+                        "password": ap_cfg.get("password") or "",
+                        "enabled": enabled,
+                    }
+                }
+            )
+            if enabled:
+                apply_ap_config(ap_cfg.get("ssid") or "PicoSetup", ap_cfg.get("password") or "")
+            else:
+                stop_config_ap()
+            send_json({"ok": True, "enabled": enabled})
             return
 
         # ======= Poller API =======
@@ -1318,6 +1513,43 @@ def poll_http_server():
             return
 
         # ======= Config API =======
+        if method == "POST" and path == "/gateway/configure":
+            payload = {}
+            try:
+                payload = json.loads(body or b"{}")
+            except Exception:
+                payload = {}
+            modbus_payload = (payload or {}).get("modbus") or {}
+
+            ok, err = _stage_gateway_modbus_to_registers(modbus_payload)
+            if not ok:
+                send_json({"ok": False, "error": err or "stage register failed"}, status="400 Bad Request")
+                return
+
+            ok, err = register_store.set_reg(64, 1, encode=False)
+            if not ok:
+                send_json({"ok": False, "error": err or "trigger REG64 failed"}, status="500 Internal Server Error")
+                return
+
+            send_json({"ok": True, "queued": True})
+            return
+
+        if method == "POST" and path == "/system/save":
+            ok, err = register_store.set_reg(60, 1, encode=False)
+            if not ok:
+                send_json({"ok": False, "error": err or "trigger REG60 failed"}, status="500 Internal Server Error")
+                return
+            send_json({"ok": True, "queued": True})
+            return
+
+        if method == "POST" and path == "/system/reset":
+            ok, err = register_store.set_reg(61, 1, encode=False)
+            if not ok:
+                send_json({"ok": False, "error": err or "trigger REG61 failed"}, status="500 Internal Server Error")
+                return
+            send_json({"ok": True, "queued": True})
+            return
+
         if method == "GET" and path == "/cfg":
             send_json(get_config())
             return
@@ -1328,10 +1560,19 @@ def poll_http_server():
                 payload = json.loads(body or b"{}")
             except Exception:
                 payload = {}
+            # UART 參數（ch0/ch1）只允許經由 REG64 套用流程更新。
+            if isinstance(payload, dict) and isinstance(payload.get("modbus"), dict):
+                payload["modbus"].pop("ch0", None)
+                payload["modbus"].pop("ch1", None)
             ok, err, cfg = update_config(payload)
             if ok and "ap" in (payload or {}):
                 ap = (cfg.get("ap") or {})
-                apply_ap_config(ap.get("ssid") or "PicoSetup", ap.get("password") or "")
+                ap_enabled = bool(ap.get("enabled", True))
+                register_store.set_reg(20, 1 if ap_enabled else 0, encode=False)
+                if ap_enabled:
+                    apply_ap_config(ap.get("ssid") or "PicoSetup", ap.get("password") or "")
+                else:
+                    stop_config_ap()
             if ok:
                 send_json({"ok": True})
             else:

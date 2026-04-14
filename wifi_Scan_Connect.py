@@ -35,11 +35,10 @@ _captive_dns = None
 # 說明：
 # 決定 Captive DNS 應回覆的 IP（優先 AP，其次 STA）。
 def _dns_target_ip():
-    """DNS 回應用 IP：若有裝置連在內建 AP，強制回 AP IP，否則回 STA IP。"""
-    # 只要還有人連著 PicoSetup，就讓 www.pico.pi.com 保持在 192.168.4.1，
-    # 避免 STA 連上家用 Wi-Fi 後 DNS 轉向新 IP，導致手機（仍在 AP）無法互動。
+    """DNS 回應用 IP：AP 啟用時優先回 AP IP，否則回 STA IP。"""
+    # 避免在高頻 DNS 查詢下反覆讀 ap.status("stations")，導致 CYW43 ioctl timeout。
     try:
-        if _ap_enabled and ap.active() and ap_station_count() > 0:
+        if _ap_enabled and ap.active():
             return "192.168.4.1"
     except Exception:
         # 若無法判斷則繼續嘗試回 STA IP
@@ -75,6 +74,12 @@ def _ensure_captive_dns():
 # 掃描並回傳可見 AP，依 RSSI 由強到弱排序。
 def scan_visible():
     """掃描 AP 並回傳已排序的可見清單（忽略空白 SSID）。"""
+    try:
+        if not wlan.active():
+            wlan.active(True)
+            time.sleep_ms(120)
+    except Exception:
+        pass
     raw = wlan.scan()
     filtered = []
     for ap in raw:
@@ -91,21 +96,48 @@ def scan_visible():
 # 以指定 SSID/密碼嘗試連線，於 timeout 內回報成功或失敗。
 def connect_to_ap(ssid: str, psk: str, timeout_ms: int = CONNECT_TIMEOUT_MS) -> bool:
     """嘗試連線指定 AP，成功回 True，失敗回 False。"""
-    _ensure_captive_dns()
     try:
-        # 先斷線避免舊連線資訊干擾，再重新激活 STA
+        # 避免無條件 disconnect 觸發 CYW43 ioctl timeout。
+        wlan.active(True)
         try:
-            wlan.disconnect()
+            if wlan.isconnected():
+                wlan.disconnect()
+                time.sleep_ms(80)
         except Exception:
             pass
-        wlan.active(True)
         wlan.connect(ssid, psk)
         t0 = time.ticks_ms()
         while not wlan.isconnected() and time.ticks_diff(time.ticks_ms(), t0) < timeout_ms:
             time.sleep_ms(150)
     except Exception:
+        try:
+            wlan.disconnect()
+        except Exception:
+            pass
         return False
-    return wlan.isconnected()
+    ok = wlan.isconnected()
+    if not ok:
+        # 失敗後明確清理，避免殘留在連線中狀態影響 AP。
+        try:
+            wlan.disconnect()
+        except Exception:
+            pass
+    return ok
+
+
+def set_sta_enabled(enabled: bool) -> bool:
+    """顯式開關 STA 介面，供開機流程穩定 AP 使用。"""
+    try:
+        if enabled:
+            wlan.active(True)
+        else:
+            try:
+                wlan.disconnect()
+            except Exception:
+                pass
+        return True
+    except Exception:
+        return False
 
 
 # =============== Wi-Fi 狀態讀取 ===============
@@ -113,12 +145,18 @@ def connect_to_ap(ssid: str, psk: str, timeout_ms: int = CONNECT_TIMEOUT_MS) -> 
 # 回傳 STA/AP 狀態資訊供 Web UI 顯示。
 def read_status():
     """取得連線狀態資訊，方便 UI 顯示。"""
+    ap_active = _ap_enabled
+    try:
+        ap_active = bool(ap.active())
+    except Exception:
+        ap_active = _ap_enabled
+
     info = {
         "active": False,
         "connected": False,
         "ifconfig": (),
         "rssi": None,
-        "ap_active": _ap_enabled,
+        "ap_active": ap_active,
         "ap_essid": _ap_config.get("essid", ""),
     }
     try:
@@ -141,22 +179,34 @@ def start_config_ap(essid: str = "PicoSetup", password: str = "") -> bool:
     """啟動內建 AP 方便手機連線設定，失敗回 False。"""
     global _ap_enabled, _ap_config, _captive_dns
     # 可依需求在這裡加 channel=6 等參數讓 AP 頻道與家用 Wi-Fi 一致，減少切頻掉線
-    try:
-        ap.active(True)
-        cfg = {"essid": essid}
-        if password:
-            # WPA2 密碼需 8 碼以上；若給空字串則開啟開放 AP。
-            cfg["password"] = password
-        ap.config(**cfg)
-        _ap_enabled = True
-        _ap_config = {"essid": essid, "password": password}
-        print("Config AP started:", essid)
-        _ensure_captive_dns()
-        return True
-    except Exception as e:
-        print("start_config_ap failed:", e)
-        _ap_enabled = False
-        return False
+    for attempt in (1, 2):
+        try:
+            ap.active(False)
+        except Exception:
+            pass
+        time.sleep_ms(120)
+
+        try:
+            ap.active(True)
+            cfg = {"essid": essid}
+            if password:
+                # WPA2 密碼需 8 碼以上；若給空字串則開啟開放 AP。
+                cfg["password"] = password
+            ap.config(**cfg)
+            # 實際驗證 AP 介面是否啟用。
+            if not ap.active():
+                raise RuntimeError("AP active() returned False")
+            _ap_enabled = True
+            _ap_config = {"essid": essid, "password": password}
+            print("Config AP started:", essid)
+            _ensure_captive_dns()
+            return True
+        except Exception as e:
+            print("start_config_ap attempt %d failed:" % attempt, e)
+            _ap_enabled = False
+            time.sleep_ms(200)
+            continue
+    return False
 
 
 # =============== 設定 AP 停止 ===============
