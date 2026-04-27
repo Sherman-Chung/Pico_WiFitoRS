@@ -17,7 +17,7 @@
    - STA 失敗 + `REG20=0` -> 強制啟 AP，並回寫 `REG20=1`。
 4. 啟動網路服務：HTTP(80) + Modbus TCP(502) + CMD TCP(12345) + mDNS（若 5353 未被占用）。
 5. 等待網路穩定後執行開機檢查：UPS/INA219 + 已啟用 RS485 通道。
-6. 讀 `REG21` 決定是否啟動 Core1 Poller worker。
+6. 啟動時先同步一次 `REG21`，並註冊 `REG21` 寫入事件（後續由 Web/Modbus 寫入即時啟停 Poller）。
 7. Core0 主迴圈每 20ms：`poll_cmd_server -> poll_http_server -> poll_modbus_tcp_server -> 更新狀態寄存器`。
 8. 主迴圈每 100ms 檢查控制命令（`REG60/61/62/64`）。
 
@@ -31,11 +31,13 @@
 - `REG64`：Apply Config（寫 1 -> 將 Register 配置套用到 RAM + UART）
 
 ## Modbus Gateway 行為
-- `Unit ID == tcp_slave_id`：走本地 Hold Register（FC03/FC04 讀；FC06/FC16 寫）。
-- `Unit ID != tcp_slave_id`：依 `REG3 (TCP_RS485_MODE)`：
-  - `disabled`：拒絕轉送，回 Exception `0x03`。
-  - `ch0`：固定轉送 CH0。
-  - `ch1`：固定轉送 CH1。
+- 每筆請求先讀 `REG1/REG2/REG3`（`tcp_slave_id/timeout/tcp_rs485_mode`）決策路由。
+- `REG3=disabled`：
+  - `Unit ID == tcp_slave_id`：走本地 Hold Register（FC03/FC04 讀；FC06/FC16 寫）。
+  - 其他 Unit ID：回 Exception `0x03`。
+- `REG3=ch0/ch1`：
+  - `Unit ID == tcp_slave_id`：仍走本地 Hold Register。
+  - 其他 Unit ID：固定轉送指定通道。
 - 指定通道未啟用時回 `0x0B`；鎖失敗回 `0x06`；下游回覆異常/逾時回 `0x0B`。
 
 ## 設定套用與保存
@@ -51,13 +53,12 @@
 - `POST /ap/enable`（對應 `REG20`）
 - `GET /cfg`
 - `POST /cfg`（UART `ch0/ch1` 欄位不接受直接更新，需走 `REG64`）
-- `POST /cfg/reset`（清空設定並重啟）
 - `POST /gateway/configure`（寫配置區 + 觸發 `REG64`）
 - `POST /system/save`（觸發 `REG60`）
 - `POST /system/reset`（觸發 `REG61`）
 - `GET /poller/config`
-- `POST /poller/start`
-- `POST /poller/stop`
+- `POST /poller/start`（同步寫 `REG21=1`）
+- `POST /poller/stop`（同步寫 `REG21=0`）
 - `GET /poller/status`
 - `POST /cmd`
 

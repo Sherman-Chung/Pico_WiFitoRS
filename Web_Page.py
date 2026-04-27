@@ -9,7 +9,6 @@
 import socket
 import json
 import time
-import machine
 from Server_CMD import handle_cmd as default_handler
 from wifi_Scan_Connect import (
     scan_visible,
@@ -18,11 +17,12 @@ from wifi_Scan_Connect import (
     apply_ap_config,
     stop_config_ap,
 )
-from config_store import get_config, update_config, reset_config
+from config_store import get_config, update_config
 from Pico_UPS import read_battery, power_source_text
 import register_store
 
 HTTP_PORT = 80
+HTTP_IO_TIMEOUT_S = 1.5
 http_sock = None
 _cmd_handler = default_handler
 
@@ -564,7 +564,7 @@ WEB_PAGE = """<!DOCTYPE html>
       <div class="note" id="poll-ch-status"></div>
       <!-- RS485 TX/RX 狀態 -->
       <div class="note mono" id="poll-comm"></div>
-      <div class="note">輪詢表格上限 256 筆，對應本地 0-255 registers。</div>
+      <div class="note">輪詢表格上限 256 筆，對應本地 100-355 registers。</div>
       <div style="overflow-x:auto;margin-top:8px;">
         <table>
           <thead>
@@ -1255,10 +1255,10 @@ def poll_http_server():
             sent += n
 
     try:
-        cl.settimeout(5)
+        cl.settimeout(HTTP_IO_TIMEOUT_S)
         req = b""
         start_ts = time.time()
-        while (b"\r\n\r\n" not in req and b"\n\n" not in req) and (time.time() - start_ts) < 5:
+        while (b"\r\n\r\n" not in req and b"\n\n" not in req) and (time.time() - start_ts) < HTTP_IO_TIMEOUT_S:
             try:
                 chunk = cl.recv(512)
             except OSError as e:
@@ -1308,7 +1308,7 @@ def poll_http_server():
         if method == "POST" and content_length > len(body):
             need = content_length - len(body)
             start_body_ts = time.time()
-            while need > 0 and (time.time() - start_body_ts) < 5:
+            while need > 0 and (time.time() - start_body_ts) < HTTP_IO_TIMEOUT_S:
                 try:
                     chunk = cl.recv(512)
                 except OSError as e:
@@ -1487,9 +1487,10 @@ def poll_http_server():
             poller_cfg["enabled"] = True
             ok, err, _ = update_config({"poller": poller_cfg})
             if ok:
-                from poller import set_enabled as poller_set_enabled
-
-                poller_set_enabled(True)
+                ok_reg, err_reg = register_store.set_reg(21, 1, encode=False, source="web_poller")
+                if not ok_reg:
+                    send_json({"ok": False, "error": err_reg or "write REG21 failed"}, status="500 Internal Server Error")
+                    return
                 send_json({"ok": True})
             else:
                 send_json({"ok": False, "error": err or "update failed"}, status="400 Bad Request")
@@ -1498,9 +1499,10 @@ def poll_http_server():
         if method == "POST" and path == "/poller/stop":
             ok, err, _ = update_config({"poller": {"enabled": False}})
             if ok:
-                from poller import set_enabled as poller_set_enabled
-
-                poller_set_enabled(False)
+                ok_reg, err_reg = register_store.set_reg(21, 0, encode=False, source="web_poller")
+                if not ok_reg:
+                    send_json({"ok": False, "error": err_reg or "write REG21 failed"}, status="500 Internal Server Error")
+                    return
                 send_json({"ok": True})
             else:
                 send_json({"ok": False, "error": err or "update failed"}, status="400 Bad Request")
@@ -1549,11 +1551,11 @@ def poll_http_server():
                 return
             send_json({"ok": True, "queued": True})
             return
-
+        # ======= Config API: GET/POST /cfg =======
         if method == "GET" and path == "/cfg":
             send_json(get_config())
             return
-
+        # ======= Config API: POST /cfg =======
         if method == "POST" and path == "/cfg":
             payload = {}
             try:
@@ -1573,17 +1575,14 @@ def poll_http_server():
                     apply_ap_config(ap.get("ssid") or "PicoSetup", ap.get("password") or "")
                 else:
                     stop_config_ap()
+            if ok and isinstance(payload, dict) and isinstance(payload.get("poller"), dict):
+                if "enabled" in payload["poller"]:
+                    reg21_val = 1 if bool(payload["poller"].get("enabled")) else 0
+                    register_store.set_reg(21, reg21_val, encode=False, source="web_cfg")
             if ok:
                 send_json({"ok": True})
             else:
                 send_json({"ok": False, "error": err or "update failed"}, status="400 Bad Request")
-            return
-
-        if method == "POST" and path == "/cfg/reset":
-            reset_config()
-            send_json({"ok": True})
-            time.sleep_ms(200)
-            machine.reset()
             return
 
         # ======= 指令 API: POST /cmd =======

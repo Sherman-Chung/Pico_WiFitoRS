@@ -25,23 +25,23 @@
           <mxGeometry x="20" y="465" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="m_cfg" value="當緩衝區有完整封包&#xa;解析並讀取 timeout/tcp_slave_id/REG3" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="m_cfg" value="當緩衝區有完整封包&#xa;解析並讀取 REG1/REG2/REG3" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="20" y="585" width="200" height="50" as="geometry"/>
         </mxCell>
 
         <mxCell id="m_indirect" value="Unit ID == tcp_slave_id ?" style="fontSize=14;fontFamily=Times New Roman;rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
-          <mxGeometry x="0" y="705" width="240" height="135" as="geometry"/>
+          <mxGeometry x="0" y="825" width="240" height="135" as="geometry"/>
         </mxCell>
 
-        <mxCell id="m_local" value="REG3 = disabled ?&#xa;(TCP_RS485_MODE)" style="fontSize=14;fontFamily=Times New Roman;rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
-          <mxGeometry x="0" y="825" width="240" height="135" as="geometry"/>
+        <mxCell id="m_local" value="REG3 = disabled 且&#xa;Unit ID != tcp_slave_id ?" style="fontSize=14;fontFamily=Times New Roman;rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="0" y="705" width="240" height="135" as="geometry"/>
         </mxCell>
 
         <mxCell id="m_regs" value="本地 Hold Register&#xa;FC03/04/06/16" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="360" y="868" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="m_map" value="依 REG3 固定路由&#xa;ch0 或 ch1" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="m_map" value="讀 cfg 通道參數並依 REG3&#xa;固定路由 ch0 或 ch1" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="20" y="1030" width="200" height="50" as="geometry"/>
         </mxCell>
 
@@ -49,7 +49,7 @@
           <mxGeometry x="0" y="1150" width="240" height="135" as="geometry"/>
         </mxCell>
 
-        <mxCell id="m_exc1" value="REG3=disabled&#xa;回傳錯誤碼 0x03" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+        <mxCell id="m_exc1" value="REG3=disabled 且非本地 Unit ID&#xa;回傳錯誤碼 0x03" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
           <mxGeometry x="360" y="1193" width="200" height="50" as="geometry"/>
         </mxCell>
 
@@ -105,19 +105,19 @@
         <mxCell id="me5" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_read" target="m_cfg">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="me6" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_cfg" target="m_indirect">
+        <mxCell id="me6" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_cfg" target="m_local">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
         <mxCell id="me7" value="是" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_indirect" target="m_regs">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="me8" value="否" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_indirect" target="m_local">
+        <mxCell id="me8" value="否" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_indirect" target="m_map">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
         <mxCell id="me9" value="是" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_local" target="m_exc1">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="me10" value="否" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_local" target="m_map">
+        <mxCell id="me10" value="否" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_local" target="m_indirect">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
         <mxCell id="me11" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="m_map" target="m_ch">

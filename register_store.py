@@ -10,12 +10,37 @@ import hold_register_map as hrm
 
 REG_COUNT = 512
 _regs = [0] * REG_COUNT
+_write_hooks = {}
+
+
+def set_write_hook(index: int, callback) -> None:
+    """
+    註冊單一暫存器寫入 hook。
+    callback 介面：callback(index, encoded_value, source)
+    """
+    if index < 0 or index >= REG_COUNT:
+        return
+    if callback is None:
+        _write_hooks.pop(index, None)
+        return
+    _write_hooks[index] = callback
+
+
+def _emit_write_hook(index: int, encoded_value: int, source: str) -> None:
+    """若該暫存器有註冊 hook，於成功寫入後觸發。"""
+    cb = _write_hooks.get(index)
+    if cb is None:
+        return
+    try:
+        cb(index, encoded_value, source)
+    except Exception as e:
+        print("register write hook error:", index, e)
 
 
 # =============== 單筆暫存器寫入 ===============
 # 說明：
 # 寫入單一 register；超出範圍、唯讀或驗證失敗時忽略或回報錯誤。
-def set_reg(index: int, value: int, encode: bool = True) -> tuple:
+def set_reg(index: int, value: int, encode: bool = True, source: str = "") -> tuple:
     """
     寫入單一 16-bit register。
     encode=True 時自動編碼（例如波特率 9600 → 2）
@@ -36,13 +61,14 @@ def set_reg(index: int, value: int, encode: bool = True) -> tuple:
         encoded_value = int(value) & 0xFFFF
 
     _regs[index] = encoded_value
+    _emit_write_hook(index, encoded_value, source)
     return True, ""
 
 
 # =============== 多筆暫存器寫入 ===============
 # 說明：
 # 從指定起點連續寫入多筆資料；超出範圍或唯讀時忽略該筆。
-def set_regs(start: int, values, encode: bool = False) -> tuple:
+def set_regs(start: int, values, encode: bool = False, source: str = "") -> tuple:
     """
     從 start 起連續寫入多筆 16-bit register。
     encode=True 時對每個值進行編碼（僅適用於特定場景）
@@ -56,7 +82,7 @@ def set_regs(start: int, values, encode: bool = False) -> tuple:
     for i, v in enumerate(values):
         idx = start + i
         if 0 <= idx < REG_COUNT:
-            ok, _ = set_reg(idx, v, encode=encode)
+            ok, _ = set_reg(idx, v, encode=encode, source=source)
             if ok:
                 success += 1
             else:

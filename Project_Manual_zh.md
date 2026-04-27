@@ -44,7 +44,7 @@
 5. 啟動 HTTP/Modbus/CMD 服務與 mDNS（5353 被占用時會記錄訊息並略過）。
 6. `wait_for_network_stable()`。
 7. `run_system_checks()`：UPS + 已啟用 RS485；失敗進入 `fail_halt()`。
-8. 依 REG21 決定是否啟 Core1 poller。
+8. 啟動時同步一次 REG21，並註冊 REG21 寫入事件；後續由 Web/Modbus 改 REG21 即時啟停 poller。
 9. 進入主迴圈。
 
 ---
@@ -71,6 +71,8 @@
 
 ## 5. Modbus Gateway（Port 502）
 ### 5.1 本地寄存器模式
+每筆請求先讀 `REG1/REG2/REG3`（`tcp_slave_id/timeout/tcp_rs485_mode`）。
+
 當 `Unit ID == tcp_slave_id`：
 - FC03/FC04：讀本地 Hold Register
 - FC06/FC16：寫本地 Hold Register
@@ -78,10 +80,9 @@
 
 ### 5.2 RS485 轉送模式
 當 `Unit ID != tcp_slave_id`：
-- 先看 `tcp_rs485_mode`（對應 REG3）
-  - `disabled`：不轉送，回 `0x03`
-  - `ch0`：固定轉送到 CH0
-  - `ch1`：固定轉送到 CH1
+- `tcp_rs485_mode=disabled`：不轉送，回 `0x03`
+- `tcp_rs485_mode=ch0`：固定轉送到 CH0
+- `tcp_rs485_mode=ch1`：固定轉送到 CH1
 - 目標通道未啟用：回 `0x0B`
 - 鎖失敗：回 `0x06`
 - 下游回覆無效/逾時：回 `0x0B`
@@ -102,7 +103,6 @@
 ### 6.2 配置
 - `GET /cfg`
 - `POST /cfg`（RAM 套用，`modbus.ch0/ch1` 會被忽略，需走 REG64）
-- `POST /cfg/reset`
 - `POST /gateway/configure`（寫 0-16 + 觸發 REG64）
 
 ### 6.3 System
@@ -111,8 +111,8 @@
 
 ### 6.4 Poller
 - `GET /poller/config`
-- `POST /poller/start`
-- `POST /poller/stop`
+- `POST /poller/start`（寫 `REG21=1`）
+- `POST /poller/stop`（寫 `REG21=0`）
 - `GET /poller/status`
 
 ### 6.5 Command Proxy
@@ -121,7 +121,7 @@
 ---
 
 ## 7. Poller
-- 啟用條件：`poller.enabled`，或 `set_enabled()` 設定 `_force_enabled`。
+- 啟用條件：由 `REG21` 寫入事件觸發 `set_enabled()` 即時啟停（開機同步一次初值）。
 - `interval_ms >= 50`。
 - 每次 `tick()` 只處理一列。
 - timeout 統一來自 `modbus.response_timeout_ms`。

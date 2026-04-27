@@ -15,6 +15,11 @@ except Exception:
 
 COUNTRY = "TW"
 CONNECT_TIMEOUT_MS = 12000
+AP_IP = "192.168.4.1"
+AP_NETMASK = "255.255.255.0"
+AP_GW = "192.168.4.1"
+AP_DNS = "192.168.4.1"
+RSSI_POLL_INTERVAL_MS = 3000
 
 # 初始化 Wi-Fi
 try:
@@ -29,6 +34,8 @@ _ap_enabled = False
 _ap_config = {"essid": "", "password": ""}
 _last_stations = []
 _captive_dns = None
+_last_rssi = None
+_last_rssi_ms = 0
 
 
 # =============== DNS 目標 IP 判定 ===============
@@ -39,7 +46,7 @@ def _dns_target_ip():
     # 避免在高頻 DNS 查詢下反覆讀 ap.status("stations")，導致 CYW43 ioctl timeout。
     try:
         if _ap_enabled and ap.active():
-            return "192.168.4.1"
+            return AP_IP
     except Exception:
         # 若無法判斷則繼續嘗試回 STA IP
         pass
@@ -50,7 +57,7 @@ def _dns_target_ip():
                 return ip
     except Exception:
         pass
-    return "192.168.4.1"
+    return AP_IP
 
 
 # =============== Captive DNS 啟動保證 ===============
@@ -62,7 +69,7 @@ def _ensure_captive_dns():
     if CaptiveDNS is None:
         return
     if _captive_dns is None:
-        _captive_dns = CaptiveDNS(ip="192.168.4.1", ip_getter=_dns_target_ip)
+        _captive_dns = CaptiveDNS(ip=AP_IP, ip_getter=_dns_target_ip)
     try:
         _captive_dns.start()
     except Exception as e:
@@ -145,6 +152,7 @@ def set_sta_enabled(enabled: bool) -> bool:
 # 回傳 STA/AP 狀態資訊供 Web UI 顯示。
 def read_status():
     """取得連線狀態資訊，方便 UI 顯示。"""
+    global _last_rssi, _last_rssi_ms
     ap_active = _ap_enabled
     try:
         ap_active = bool(ap.active())
@@ -163,10 +171,19 @@ def read_status():
         info["active"] = wlan.active()
         info["connected"] = wlan.isconnected()
         info["ifconfig"] = wlan.ifconfig()
-        try:
-            info["rssi"] = wlan.status("rssi")
-        except Exception:
+        # CYW43 在高頻 ioctl 下容易 timeout，RSSI 改低頻快取查詢。
+        if info["connected"]:
+            now_ms = time.ticks_ms()
+            if _last_rssi is None or time.ticks_diff(now_ms, _last_rssi_ms) >= RSSI_POLL_INTERVAL_MS:
+                try:
+                    _last_rssi = wlan.status("rssi")
+                except Exception:
+                    pass
+                _last_rssi_ms = now_ms
+            info["rssi"] = _last_rssi
+        else:
             info["rssi"] = None
+            _last_rssi = None
     except Exception:
         pass
     return info
@@ -188,6 +205,11 @@ def start_config_ap(essid: str = "PicoSetup", password: str = "") -> bool:
 
         try:
             ap.active(True)
+            # 固定 AP 網段，避免不同韌體/歷史設定導致 IP 漂移。
+            try:
+                ap.ifconfig((AP_IP, AP_NETMASK, AP_GW, AP_DNS))
+            except Exception:
+                pass
             cfg = {"essid": essid}
             if password:
                 # WPA2 密碼需 8 碼以上；若給空字串則開啟開放 AP。
@@ -198,7 +220,12 @@ def start_config_ap(essid: str = "PicoSetup", password: str = "") -> bool:
                 raise RuntimeError("AP active() returned False")
             _ap_enabled = True
             _ap_config = {"essid": essid, "password": password}
-            print("Config AP started:", essid)
+            ap_ip = AP_IP
+            try:
+                ap_ip = ap.ifconfig()[0]
+            except Exception:
+                pass
+            print("Config AP started:", essid, "IP=", ap_ip)
             _ensure_captive_dns()
             return True
         except Exception as e:

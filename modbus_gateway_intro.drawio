@@ -1,0 +1,186 @@
+<mxfile host="app.diagrams.net" modified="2026-04-22T00:00:00.000Z" agent="Codex" version="20.8.20" type="device">
+  <diagram id="modbus-gateway-intro" name="Modbus Gateway Intro">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1500" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="Modbus 閘道器功能與運作原理（整合流程圖）" style="fontSize=26;fontStyle=1;fontFamily=Times New Roman;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="20" width="1100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="sub" value="請求由上位系統進入閘道器，依流程完成路由、鎖控、透傳與例外回報" style="fontSize=15;fontFamily=Times New Roman;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="65" width="1000" height="28" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="c1" value="上位系統&#xa;(SCADA / HMI / PLC)" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="250" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="c2" value="Modbus 閘道器" style="fontSize=14;fontStyle=1;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="380" y="120" width="250" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="c3" value="RS485 現場設備" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#fce5cd;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="700" y="120" width="250" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="b1" value="1. 封包解析與路由" style="fontSize=16;fontStyle=1;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="60" y="250" width="1380" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="b1bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7fbff;strokeColor=#b7d1ea;" vertex="1" parent="1">
+          <mxGeometry x="60" y="282" width="1380" height="145" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n1" value="接收 Modbus TCP 請求" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="327" width="230" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="n2" value="解析封包內容&#xa;(功能與目標)" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="327" width="230" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="d1" value="可處理請求?" style="fontSize=14;fontFamily=Times New Roman;rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="660" y="298" width="170" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="n3" value="路由判斷&#xa;本地回應 / 轉送設備" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="327" width="230" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="d2" value="本地回應?" style="fontSize=14;fontFamily=Times New Roman;rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="298" width="170" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="exc03" value="例外回報 0x03" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="327" width="150" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="b2" value="2. 通訊鎖與防碰撞" style="fontSize=16;fontStyle=1;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="60" y="455" width="1380" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="b2bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8f0;strokeColor=#f2c185;" vertex="1" parent="1">
+          <mxGeometry x="60" y="487" width="1380" height="145" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n4" value="申請目標通道通訊鎖" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="532" width="240" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="d3" value="鎖定成功?" style="fontSize=14;fontFamily=Times New Roman;rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="670" y="503" width="170" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="n5" value="同通道僅單筆收發&#xa;避免匯流排碰撞" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="910" y="532" width="230" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="exc06" value="例外回報 0x06" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="532" width="150" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="b3" value="3. 協定轉換與透傳傳輸" style="fontSize=16;fontStyle=1;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="660" width="1380" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="b3bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#faf7fc;strokeColor=#c7b5d6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="692" width="1380" height="145" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n6" value="TCP 請求轉為&#xa;RTU / ASCII 格式" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="737" width="230" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="n7" value="透傳送往 RS485 設備&#xa;並等待回覆" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="580" y="737" width="230" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="n8" value="設備回覆轉回 TCP 回應" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="860" y="737" width="230" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="b4" value="4. 超時與例外回報" style="fontSize=16;fontStyle=1;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="60" y="865" width="1380" height="32" as="geometry"/>
+        </mxCell>
+        <mxCell id="b4bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff6f6;strokeColor=#e4b5b5;" vertex="1" parent="1">
+          <mxGeometry x="60" y="897" width="1380" height="230" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="d4" value="回覆在時限內且有效?" style="fontSize=14;fontFamily=Times New Roman;rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="520" y="927" width="190" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="exc0b" value="例外回報 0x0B" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="780" y="965" width="160" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="n9" value="封裝並回傳結果給上位系統" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="250" y="965" width="240" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="n10" value="釋放通訊鎖，結束本次流程" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="250" y="1050" width="240" height="55" as="geometry"/>
+        </mxCell>
+
+        <!-- Links between actors -->
+        <mxCell id="e1" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="c1" target="c2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="c2" target="c3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Main flow -->
+        <mxCell id="e3" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="c2" target="n1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="n2" target="d1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="是" style="fontSize=12;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="d1" target="n3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="否" style="fontSize=12;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="d1" target="exc03">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="n3" target="d2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="是" style="fontSize=12;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="d2" target="n9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" value="否" style="fontSize=12;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="d2" target="n4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e11" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="n4" target="d3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" value="是" style="fontSize=12;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="d3" target="n5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" value="否" style="fontSize=12;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="d3" target="exc06">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e14" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="n5" target="n6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e15" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="n6" target="n7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e16" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="n7" target="n8">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e17" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="n8" target="d4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e18" value="是" style="fontSize=12;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="d4" target="n9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e19" value="否" style="fontSize=12;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="d4" target="exc0b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e20" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="exc03" target="n9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e21" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="exc06" target="n9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e22" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="exc0b" target="n9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e23" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="n9" target="n10">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

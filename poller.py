@@ -229,16 +229,18 @@ def _parse_return(cmd: int, pdu: bytes):
 
 # =============== 本地 Registers 回填 ===============
 # 說明：
-# 將輪詢回覆資料寫入本地 0-255 registers（以列索引為基準）。
+# 將輪詢回覆資料寫入本地 100-355 registers（以列索引為基準）。
 def _update_registers(cmd: int, pdu: bytes, row_index: int, row_data: int):
-    """將回覆資料寫入本地 0-255 registers（以表格列 index 為基準）。"""
+    """將回覆資料寫入本地 100-355 registers（以表格列 index 為基準）。"""
     if not pdu:
         return
     func = pdu[0]
     # Exception 不更新
     if func & 0x80:
         return
-    base = row_index
+    base = 100 + row_index
+    if base < 100 or base > 355:
+        return
     if func in (0x03, 0x04):
         if len(pdu) < 2:
             return
@@ -249,7 +251,10 @@ def _update_registers(cmd: int, pdu: bytes, row_index: int, row_data: int):
             if i + 1 >= len(data):
                 break
             regs.append((data[i] << 8) | data[i + 1])
-        set_regs(base, regs)
+        max_len = 355 - base + 1
+        if max_len <= 0:
+            return
+        set_regs(base, regs[:max_len])
         return
     if func == 0x06 and len(pdu) >= 5:
         val = (pdu[-2] << 8) | pdu[-1]

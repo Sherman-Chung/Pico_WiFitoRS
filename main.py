@@ -25,12 +25,14 @@ from mdns_service import MDNSResponder
 from Pico_UPS import read_battery, last_battery_error
 from config_store import get_config, update_config, reset_config
 from modbus_gateway import start_modbus_tcp_server, poll_modbus_tcp_server
-from poller import tick as poller_tick
+from poller import tick as poller_tick, set_enabled as poller_set_enabled
 import register_store
 
 _poller_thread_started = False
 _last_cmd_check_ms = 0
 _cmd_check_interval_ms = 100
+_last_status_update_ms = 0
+_status_update_interval_ms = 500
 try:
     _cpu_temp_adc = machine.ADC(4)
 except Exception:
@@ -366,19 +368,39 @@ def main():
     # 進入主迴圈前先做一次模組檢查（失敗會停機閃燈）
     run_system_checks()
 
-    # REG21 決定 Poller 是否啟動（Core1）
-    poller_enabled = 1 if _read_reg(21, 0) else 0
+    # REG21 觸發式控制：
+    # - 開機先同步一次目前 REG21 狀態
+    # - 後續只在 REG21 被寫入時觸發，不做週期性監看
+    poller_enabled = False
     poller_on_core1 = False
-    if poller_enabled:
-        poller_on_core1 = start_poller_worker()
-    else:
-        print("Poller disabled by REG21")
+    watched_reg21_sources = {"boot_sync", "modbus_tcp_local", "web_poller", "web_cfg"}
+
+    def on_reg21_written(reg_index: int, raw_value: int, source: str):
+        nonlocal poller_enabled, poller_on_core1
+        if source not in watched_reg21_sources:
+            return
+        reg21_enabled = bool(int(raw_value) & 0xFFFF)
+        if reg21_enabled == poller_enabled:
+            return
+        poller_enabled = reg21_enabled
+        poller_set_enabled(reg21_enabled)
+        if reg21_enabled:
+            poller_on_core1 = start_poller_worker()
+            if poller_on_core1:
+                print("Poller enabled by REG21 (core1)")
+            else:
+                print("Poller enabled by REG21 (core0 fallback)")
+        else:
+            print("Poller disabled by REG21")
+
+    register_store.set_write_hook(21, on_reg21_written)
+    on_reg21_written(21, _read_reg(21, 0), "boot_sync")
 
     boot_ticks_ms = time.ticks_ms()
     update_hold_register_status(boot_ticks_ms)
 
     # =============== 主迴圈事件處理 ===============
-    global _last_cmd_check_ms
+    global _last_cmd_check_ms, _last_status_update_ms
 
     while True:
         # 主迴圈順序原則：
@@ -392,10 +414,12 @@ def main():
         poll_modbus_tcp_server()
 
         # 週期更新系統狀態至 Hold Register (50-56)
-        update_hold_register_status(boot_ticks_ms)
+        now_ms = time.ticks_ms()
+        if time.ticks_diff(now_ms, _last_status_update_ms) >= _status_update_interval_ms:
+            _last_status_update_ms = now_ms
+            update_hold_register_status(boot_ticks_ms)
 
         # 【新增】定期檢查 Hold Register 控制命令 (60-64)
-        now_ms = time.ticks_ms()
         if time.ticks_diff(now_ms, _last_cmd_check_ms) >= _cmd_check_interval_ms:
             _last_cmd_check_ms = now_ms
             try:

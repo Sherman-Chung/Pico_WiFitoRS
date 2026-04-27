@@ -41,7 +41,7 @@
           <mxGeometry x="260" y="560" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="ensureap" value="REG21=1 時&#xa;啟 Core1 Poller Worker" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="ensureap" value="註冊 REG21 寫入事件&#xa;+ 開機同步一次 REG21" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="20" y="670" width="200" height="50" as="geometry"/>
         </mxCell>
 
@@ -65,12 +65,16 @@
           <mxGeometry x="700" y="780" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="poller" value="更新狀態 + 檢查 REG60/61/62/64&#xa;sleep 20ms" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="poller" value="更新狀態 + 檢查 REG60/61/62/64&#xa;必要時 Core0 poller + sleep 20ms" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="930" y="780" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="core1poll" value="Core1 背景執行緒&#xa;poller_tick + sleep 5ms" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+        <mxCell id="core1poll" value="REG21 事件為 1 時&#xa;Core1 背景執行緒 poller_tick + sleep 5ms" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
           <mxGeometry x="840" y="680" width="200" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="reg21evt" value="若 HTTP / Modbus 本地寫 REG21&#xa;觸發 on_reg21_written 即時啟停" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="560" y="680" width="240" height="50" as="geometry"/>
         </mxCell>
 
         <!-- Edges -->
@@ -127,7 +131,16 @@
         <mxCell id="e17" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="poller" target="loop">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e18" value="REG21=1" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="ensureap" target="core1poll">
+        <mxCell id="e18" value="開機同步 REG21=1" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="ensureap" target="core1poll">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e19" value="若寫 REG21" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="pollhttp" target="reg21evt">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e20" value="若寫 REG21" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="pollmodbus" target="reg21evt">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e21" value="1 時啟 Core1 / 0 時停用" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="reg21evt" target="core1poll">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 

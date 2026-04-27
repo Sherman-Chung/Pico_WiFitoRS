@@ -128,10 +128,9 @@ Modbus TCP 本地寄存器路徑：
 ## 8. 與 Gateway 路由關係（重點）
 
 `modbus_gateway.py` 對 `Unit ID != tcp_slave_id` 的請求：
-- 讀 `tcp_rs485_mode`（Reg3）
-  - `disabled`：拒絕轉送，回 `0x03`
-  - `ch0`：固定 CH0
-  - `ch1`：固定 CH1
+- 每筆先讀 `REG1/REG2/REG3`（`tcp_slave_id/timeout/tcp_rs485_mode`）
+- `tcp_rs485_mode=disabled`：拒絕轉送，回 `0x03`
+- `tcp_rs485_mode=ch0/ch1`：固定指定通道
 - 指定通道未啟用：`0x0B`
 - 鎖失敗：`0x06`
 - 回覆異常/逾時：`0x0B`
@@ -148,6 +147,9 @@ Modbus TCP 本地寄存器路徑：
 - `POST /cfg`：
   - 更新 RAM 配置
   - `modbus.ch0/ch1` 會被後端移除（UART 需走 `REG64`）
+- `POST /poller/start` / `POST /poller/stop`：
+  - 同步更新 `poller.enabled`
+  - 同步寫入 `REG21`（觸發 Poller 即時啟停）
 - `POST /system/save`：觸發 `REG60`
 - `POST /system/reset`：觸發 `REG61`
 

@@ -18,6 +18,17 @@ SERVER_PORT = 12345  # 可依需求調整
 server_sock = None
 
 
+def _is_sock_timeout(err: Exception) -> bool:
+    """判斷是否為 socket timeout/暫時無資料。"""
+    code = None
+    try:
+        if getattr(err, "args", None):
+            code = err.args[0]
+    except Exception:
+        code = None
+    return code in (11, 35, 110, 116, 119)
+
+
 # =============== Hex Token 解析 ===============
 # 說明：
 # 將命令列中的 hex token 轉成 bytes（支援 0x 前綴）。
@@ -293,8 +304,14 @@ def poll_cmd_server():
     print("client connected from", addr)
 
     try:
-        cl.settimeout(30)
-        data = cl.recv(1024)
+        # 避免 CMD client 連上但不送資料時卡住主迴圈，影響 HTTP 反應。
+        cl.settimeout(0.2)
+        try:
+            data = cl.recv(1024)
+        except OSError as e:
+            if _is_sock_timeout(e):
+                return
+            raise
         if not data:
             cl.close()
             return
