@@ -76,6 +76,30 @@ def _stage_gateway_modbus_to_registers(modbus: dict):
 
     return True, None
 
+
+def _sync_poller_config_to_registers(poller: dict, source: str = "web_cfg"):
+    """
+    將 Web 更新後的 Poller 設定同步到 REG21/REG22。
+    REG64 會從 Hold Register 重建 config；若 REG22 沒同步，Gateway 設定會覆蓋回舊間隔。
+    """
+    poller = poller or {}
+    if "enabled" in poller:
+        reg21_val = 1 if bool(poller.get("enabled")) else 0
+        ok, err = register_store.set_reg(21, reg21_val, encode=False, source=source)
+        if not ok:
+            return False, err or "write REG21 failed"
+    if "interval_ms" in poller:
+        try:
+            interval_reg = int(poller.get("interval_ms") or 1000) // 10
+        except Exception:
+            return False, "poller interval invalid"
+        if interval_reg < 5:
+            interval_reg = 5
+        ok, err = register_store.set_reg(22, interval_reg, encode=False, source=source)
+        if not ok:
+            return False, err or "write REG22 failed"
+    return True, None
+
 # 網頁內容與原本 main.py 相同，便於手機/瀏覽器遠端操控
 WEB_PAGE = """<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -286,6 +310,14 @@ WEB_PAGE = """<!DOCTYPE html>
   }
   .mono {
     font-family: "Courier New", monospace;
+  }
+  #poll-comm {
+    white-space: pre-wrap;
+    line-height: 1.35;
+  }
+  #wifi-status {
+    white-space: pre-wrap;
+    line-height: 1.35;
   }
 </style>
 </head>
@@ -779,6 +811,7 @@ WEB_PAGE = """<!DOCTYPE html>
   }
 
   var pollRows = [];
+  var pendingPollIntervalValue = null;
 
   function setPoller(p) {
     var rows = p.rows || [];
@@ -790,7 +823,8 @@ WEB_PAGE = """<!DOCTYPE html>
       data: r.data || '0001',
       ret: ''
     }));
-    document.getElementById('poll-interval').value = p.interval_ms || 1000;
+    document.getElementById('poll-interval').value = pendingPollIntervalValue || p.interval_ms || 1000;
+    pendingPollIntervalValue = null;
     renderPollRows();
   }
 
@@ -940,6 +974,7 @@ WEB_PAGE = """<!DOCTYPE html>
   }
 
   function saveConfig() {
+    pendingPollIntervalValue = document.getElementById('poll-interval').value;
     var payload = {
       modbus: {
         tcp_port: 502,
@@ -1055,7 +1090,7 @@ WEB_PAGE = """<!DOCTYPE html>
     })
       .then(r => r.json())
       .then(d => {
-        document.getElementById('cfg-msg').textContent = d.ok ? 'AP 設定已更新' : ('更新失敗：' + (d.error || 'unknown'));
+        showCfgMsg(d.ok ? '' : ('更新失敗：' + (d.error || 'unknown')));
         refreshStatus();
       })
       .catch(() => {
@@ -1072,7 +1107,7 @@ WEB_PAGE = """<!DOCTYPE html>
     })
       .then(r => r.json())
       .then(d => {
-        document.getElementById('cfg-msg').textContent = d.ok ? ('AP Enable 已' + (enabled ? '開啟' : '關閉')) : ('AP Enable 更新失敗：' + (d.error || 'unknown'));
+        showCfgMsg(d.ok ? '' : ('AP Enable 更新失敗：' + (d.error || 'unknown')));
         refreshStatus();
       })
       .catch(() => {
@@ -1080,32 +1115,43 @@ WEB_PAGE = """<!DOCTYPE html>
       });
   }
 
+  function showCfgMsg(text) {
+    var el = document.getElementById('cfg-msg');
+    if (!el) return;
+    el.textContent = text || '';
+  }
+
   function refreshStatus() {
     fetch('/wifi/status')
       .then(r => r.json())
       .then(d => {
-        var txt = [];
-        txt.push('STA connected: ' + d.connected + (d.ip ? ' / IP ' + d.ip : ''));
-        if (d.rssi !== null && d.rssi !== undefined) txt.push('RSSI ' + d.rssi + ' dBm');
-        var apEnable = (d.ap_enable_reg === 1 || d.ap_enable_reg === true);
-        var apActive = (d.ap_active_reg === 1 || d.ap_active_reg === true);
-        txt.push('AP enable: ' + apEnable);
-        txt.push('AP active: ' + apActive + (d.ap_essid ? ' (' + d.ap_essid + ')' : ''));
-        var apEnableEl = document.getElementById('ap-enable');
-        if (apEnableEl) apEnableEl.checked = apEnable;
-        if (d.power) {
-          var pwr = d.power;
-          if (pwr === 'external') pwr = '外部供電';
-          if (pwr === 'battery') pwr = '電池供電';
-          if (pwr === 'idle') pwr = '待機';
-          if (pwr === 'unknown') pwr = '未知';
-          txt.push('Power: ' + pwr + (d.batt_p !== null && d.batt_p !== undefined ? (' / ' + d.batt_p + '%') : ''));
-        }
-        document.getElementById('wifi-status').textContent = txt.join(' | ');
+        renderWifiStatus(d);
       })
       .catch(() => {
         document.getElementById('wifi-status').textContent = '無法取得狀態';
       });
+  }
+
+  function renderWifiStatus(d) {
+    var txt = [];
+    txt.push('STA connected: ' + d.connected);
+    txt.push('IP ' + (d.ip || ''));
+    if (d.rssi !== null && d.rssi !== undefined) txt.push('RSSI ' + d.rssi + ' dBm');
+    var apEnable = (d.ap_enable_reg === 1 || d.ap_enable_reg === true);
+    var apActive = (d.ap_active_reg === 1 || d.ap_active_reg === true);
+    txt.push('AP enable: ' + apEnable);
+    txt.push('AP active: ' + apActive + (d.ap_essid ? ' (' + d.ap_essid + ')' : ''));
+    var apEnableEl = document.getElementById('ap-enable');
+    if (apEnableEl) apEnableEl.checked = apEnable;
+    if (d.power) {
+      var pwr = d.power;
+      if (pwr === 'external') pwr = '外部供電';
+      if (pwr === 'battery') pwr = '電池供電';
+      if (pwr === 'idle') pwr = '待機';
+      if (pwr === 'unknown') pwr = '未知';
+      txt.push('Power: ' + pwr + (d.batt_p !== null && d.batt_p !== undefined ? (' / ' + d.batt_p + '%') : ''));
+    }
+    document.getElementById('wifi-status').textContent = txt.join('\\n');
   }
 
   function refreshScan() {
@@ -1151,16 +1197,7 @@ WEB_PAGE = """<!DOCTYPE html>
           msg.textContent = '連線失敗：' + (d.error || 'unknown');
         }
         if (d.connected !== undefined) {
-          var txt = [];
-          txt.push('STA connected: ' + d.connected + (d.ip ? ' / IP ' + d.ip : ''));
-          if (d.rssi !== null && d.rssi !== undefined) txt.push('RSSI ' + d.rssi + ' dBm');
-          var apEnable = (d.ap_enable_reg === 1 || d.ap_enable_reg === true);
-          var apActive = (d.ap_active_reg === 1 || d.ap_active_reg === true);
-          txt.push('AP enable: ' + apEnable);
-          txt.push('AP active: ' + apActive + (d.ap_essid ? ' (' + d.ap_essid + ')' : ''));
-          document.getElementById('wifi-status').textContent = txt.join(' | ');
-          var apEnableEl = document.getElementById('ap-enable');
-          if (apEnableEl) apEnableEl.checked = apEnable;
+          renderWifiStatus(d);
         } else {
           refreshStatus();
         }
@@ -1485,11 +1522,11 @@ def poll_http_server():
                 payload = {}
             poller_cfg = payload.get("poller") or {}
             poller_cfg["enabled"] = True
-            ok, err, _ = update_config({"poller": poller_cfg})
+            ok, err, cfg = update_config({"poller": poller_cfg})
             if ok:
-                ok_reg, err_reg = register_store.set_reg(21, 1, encode=False, source="web_poller")
+                ok_reg, err_reg = _sync_poller_config_to_registers((cfg.get("poller") or {}), source="web_poller")
                 if not ok_reg:
-                    send_json({"ok": False, "error": err_reg or "write REG21 failed"}, status="500 Internal Server Error")
+                    send_json({"ok": False, "error": err_reg or "sync poller registers failed"}, status="500 Internal Server Error")
                     return
                 send_json({"ok": True})
             else:
@@ -1497,9 +1534,9 @@ def poll_http_server():
             return
 
         if method == "POST" and path == "/poller/stop":
-            ok, err, _ = update_config({"poller": {"enabled": False}})
+            ok, err, cfg = update_config({"poller": {"enabled": False}})
             if ok:
-                ok_reg, err_reg = register_store.set_reg(21, 0, encode=False, source="web_poller")
+                ok_reg, err_reg = _sync_poller_config_to_registers({"enabled": (cfg.get("poller") or {}).get("enabled")}, source="web_poller")
                 if not ok_reg:
                     send_json({"ok": False, "error": err_reg or "write REG21 failed"}, status="500 Internal Server Error")
                     return
@@ -1526,6 +1563,12 @@ def poll_http_server():
             ok, err = _stage_gateway_modbus_to_registers(modbus_payload)
             if not ok:
                 send_json({"ok": False, "error": err or "stage register failed"}, status="400 Bad Request")
+                return
+
+            poller_cfg = (get_config().get("poller") or {})
+            ok, err = _sync_poller_config_to_registers(poller_cfg, source="web_gateway")
+            if not ok:
+                send_json({"ok": False, "error": err or "sync poller registers failed"}, status="500 Internal Server Error")
                 return
 
             ok, err = register_store.set_reg(64, 1, encode=False)
@@ -1576,9 +1619,10 @@ def poll_http_server():
                 else:
                     stop_config_ap()
             if ok and isinstance(payload, dict) and isinstance(payload.get("poller"), dict):
-                if "enabled" in payload["poller"]:
-                    reg21_val = 1 if bool(payload["poller"].get("enabled")) else 0
-                    register_store.set_reg(21, reg21_val, encode=False, source="web_cfg")
+                ok_reg, err_reg = _sync_poller_config_to_registers((cfg.get("poller") or {}), source="web_cfg")
+                if not ok_reg:
+                    send_json({"ok": False, "error": err_reg or "sync poller registers failed"}, status="500 Internal Server Error")
+                    return
             if ok:
                 send_json({"ok": True})
             else:

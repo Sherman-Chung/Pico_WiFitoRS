@@ -358,12 +358,12 @@ def main():
             else:
                 print("Config AP failed to start")
 
+    # 等待網路狀態穩定
+    wait_for_network_stable()
+
     # 統一啟動網路服務（HTTP + Modbus TCP + CMD TCP + mDNS）
     start_network_services()
     maybe_start_mdns()
-
-    # 等待網路狀態穩定
-    wait_for_network_stable()
 
     # 進入主迴圈前先做一次模組檢查（失敗會停機閃燈）
     run_system_checks()
