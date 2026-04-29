@@ -5,7 +5,10 @@
 # - 若要改導向策略，優先改 ip_getter 回呼來源，不建議改 DNS 封包邏輯。
 
 import socket
-import _thread
+try:
+    import _thread
+except Exception:
+    _thread = None
 
 
 # =============== IPv4 字串轉位元組 ===============
@@ -39,7 +42,7 @@ class CaptiveDNS:
     # =============== CaptiveDNS 建構子 ===============
     # 說明：
     # 初始化 DNS 服務參數，可透過 ip_getter 動態決定回覆 IP。
-    def __init__(self, ip="192.168.4.1", port=53, ip_getter=None):
+    def __init__(self, ip="192.168.4.1", port=53, ip_getter=None, threaded=False):
         # 若提供 ip_getter，每次回應都會取最新 IP（例如 STA IP）。
         self.ip = ip
         self.ip_getter = ip_getter
@@ -47,6 +50,7 @@ class CaptiveDNS:
         self._sock = None
         self._thread = None
         self._running = False
+        self.threaded = threaded
 
     # =============== CaptiveDNS 啟動 ===============
     # 說明：
@@ -59,8 +63,12 @@ class CaptiveDNS:
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.bind(("0.0.0.0", self.port))
             self._running = True
-            self._thread = _thread.start_new_thread(self._loop, ())
-            print("Captive DNS started, all hosts ->", self.ip)
+            if self.threaded and _thread is not None:
+                self._thread = _thread.start_new_thread(self._loop, ())
+                print("Captive DNS started, all hosts ->", self.ip)
+            else:
+                self._sock.settimeout(0)
+                print("Captive DNS started in poll mode, all hosts ->", self.ip)
         except Exception as e:
             print("Captive DNS start failed:", e)
             self.stop()
@@ -85,66 +93,72 @@ class CaptiveDNS:
         # DNS header: ID(2) | flags(2) | QD(2) | AN(2) | NS(2) | AR(2)
         # 只回 A 記錄，且將查詢名稱指向指定 IP（或 ip_getter 回傳的 IP）。
         while self._running:
-            if self._sock is None:
-                break
-            try:
-                self._sock.settimeout(1.0)
-                data, addr = self._sock.recvfrom(512)
-            except OSError:
-                continue
-            except Exception:
-                continue
-            if not data or len(data) < 12:
-                continue
-            tid = data[0:2]
-            flags = b"\x81\x80"  # standard query response, no error
-            qdcount = data[4:6]
-            # parse question to echo back
-            idx = 12
-            try:
+            self.poll(timeout=1.0)
+
+    def poll(self, timeout=0):
+        """非阻塞處理一筆 DNS 查詢；由主迴圈呼叫可避免佔用 core1。"""
+        if not self._running or self._sock is None:
+            return
+        try:
+            self._sock.settimeout(timeout)
+        except Exception:
+            pass
+        try:
+            data, addr = self._sock.recvfrom(512)
+        except OSError:
+            return
+        except Exception:
+            return
+        if not data or len(data) < 12:
+            return
+        tid = data[0:2]
+        flags = b"\x81\x80"  # standard query response, no error
+        qdcount = data[4:6]
+        # parse question to echo back
+        idx = 12
+        try:
+            l = data[idx]
+            while l and idx < len(data):
+                idx += 1
+                idx += l
                 l = data[idx]
-                while l and idx < len(data):
-                    idx += 1
-                    idx += l
-                    l = data[idx]
-                idx += 1  # skip zero
-                qtype = data[idx : idx + 2]
-                qclass = data[idx + 2 : idx + 4]
-            except Exception:
-                continue
-            question = data[12: idx + 4]
-            # only answer A
-            if qtype != b"\x00\x01":
-                continue
+            idx += 1  # skip zero
+            qtype = data[idx : idx + 2]
+        except Exception:
+            return
+        question = data[12: idx + 4]
+        # only answer A
+        if qtype != b"\x00\x01":
+            return
 
-            target_ip = self.ip
-            if self.ip_getter:
-                try:
-                    target_ip = self.ip_getter() or target_ip
-                except Exception:
-                    pass
-
-            ans = b"\xc0\x0c"  # pointer to name at offset 12
-            ans += b"\x00\x01"  # type A
-            ans += b"\x00\x01"  # class IN
-            ans += b"\x00\x00\x00\x1e"  # TTL 30s
-            ans += b"\x00\x04"  # RDLENGTH
-            ans += _inet_aton(target_ip)
-
-            resp = b"".join(
-                [
-                    tid,
-                    flags,
-                    qdcount,
-                    b"\x00\x01",
-                    b"\x00\x00",
-                    b"\x00\x00",
-                    question,
-                    ans,
-                ]
-            )
+        target_ip = self.ip
+        if self.ip_getter:
             try:
-                if self._sock:
-                    self._sock.sendto(resp, addr)
+                target_ip = self.ip_getter() or target_ip
             except Exception:
                 pass
+
+        ans = b"\xc0\x0c"  # pointer to name at offset 12
+        ans += b"\x00\x01"  # type A
+        ans += b"\x00\x01"  # class IN
+        ans += b"\x00\x00\x00\x1e"  # TTL 30s
+        ans += b"\x00\x04"  # RDLENGTH
+        ans += _inet_aton(target_ip)
+
+        resp = b"".join(
+            [
+                tid,
+                flags,
+                qdcount,
+                b"\x00\x01",
+                b"\x00\x00",
+                b"\x00\x00",
+                question,
+                ans,
+            ]
+        )
+        try:
+            if self._sock:
+                self._sock.sendto(resp, addr)
+        except Exception:
+            pass

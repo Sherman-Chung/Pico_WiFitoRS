@@ -353,11 +353,11 @@ WEB_PAGE = """<!DOCTYPE html>
       </div>
       <div class="row" style="margin-top:10px;">
         <div>
-          <label>TCP 轉送模式（REG3）</label>
+          <label>TCP 透傳模式（REG3）</label>
           <select id="tcp-rs485-mode" class="gw-field">
-            <option value="disabled">disabled（TCP→Register Map）</option>
-            <option value="ch0">ch0（TCP→RS485 CH0）</option>
-            <option value="ch1">ch1（TCP→RS485 CH1）</option>
+            <option value="disabled">disabled</option>
+            <option value="ch0">ch0</option>
+            <option value="ch1">ch1</option>
           </select>
         </div>
         <div></div>

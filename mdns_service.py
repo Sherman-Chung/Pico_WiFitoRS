@@ -5,7 +5,10 @@
 # - 回覆資料僅包含 A 記錄，若要擴充 PTR/SRV/TXT 需補完整 DNS record 組包。
 
 import socket
-import _thread
+try:
+    import _thread
+except Exception:
+    _thread = None
 
 
 # =============== IPv4 字串轉位元組 ===============
@@ -42,12 +45,13 @@ class MDNSResponder:
     # =============== mDNS 建構子 ===============
     # 說明：
     # 初始化 hostname 與動態 IP 來源。
-    def __init__(self, hostname="pico", ip_getter=None):
+    def __init__(self, hostname="pico", ip_getter=None, threaded=False):
         self.hostname = hostname
         self.ip_getter = ip_getter or (lambda: "0.0.0.0")
         self._sock = None
         self._running = False
         self._thread = None
+        self.threaded = threaded
 
     # =============== mDNS 啟動 ===============
     # 說明：
@@ -63,8 +67,12 @@ class MDNSResponder:
             self._sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
             self._sock.bind(("0.0.0.0", MDNS_PORT))
             self._running = True
-            self._thread = _thread.start_new_thread(self._loop, ())
-            print("mDNS responder started for %s.local" % self.hostname)
+            if self.threaded and _thread is not None:
+                self._thread = _thread.start_new_thread(self._loop, ())
+                print("mDNS responder started for %s.local" % self.hostname)
+            else:
+                self._sock.settimeout(0)
+                print("mDNS responder started in poll mode for %s.local" % self.hostname)
         except OSError as e:
             # 5353 可能已被系統或其他服務占用；此情況下略過 mDNS 但不視為致命錯誤。
             code = e.args[0] if getattr(e, "args", None) else None
@@ -95,71 +103,80 @@ class MDNSResponder:
     # 監聽 mDNS 查詢，命中 hostname.local 時回覆 A 記錄。
     def _loop(self):
         """簡易 responder：只處理 A 紀錄且僅回 hostname.local 的查詢。"""
-        target_name = (self.hostname + ".local").encode("utf-8")
         while self._running:
-            try:
-                self._sock.settimeout(1.0)
-                data, addr = self._sock.recvfrom(512)
-            except OSError:
-                continue
-            except Exception:
-                continue
-            if not data or len(data) < 12:
-                continue
-            # 簡單解析問題
-            try:
-                idx = 12
-                labels = []
+            self.poll(timeout=1.0)
+
+    def poll(self, timeout=0):
+        """非阻塞處理一筆 mDNS 查詢；由主迴圈呼叫可避免佔用 core1。"""
+        if not self._running or self._sock is None:
+            return
+        target_name = (self.hostname + ".local").encode("utf-8")
+        try:
+            self._sock.settimeout(timeout)
+        except Exception:
+            pass
+        try:
+            data, addr = self._sock.recvfrom(512)
+        except OSError:
+            return
+        except Exception:
+            return
+        if not data or len(data) < 12:
+            return
+        # 簡單解析問題
+        try:
+            idx = 12
+            labels = []
+            l = data[idx]
+            while l and idx < len(data):
+                idx += 1
+                labels.append(data[idx : idx + l])
+                idx += l
                 l = data[idx]
-                while l and idx < len(data):
-                    idx += 1
-                    labels.append(data[idx : idx + l])
-                    idx += l
-                    l = data[idx]
-                idx += 1  # zero
-                qtype = data[idx : idx + 2]
-            except Exception:
-                continue
+            idx += 1  # zero
+            qtype = data[idx : idx + 2]
+        except Exception:
+            return
 
-            asked = b".".join(labels)
-            if asked.lower() != target_name.lower():
-                continue
-            if qtype != b"\x00\x01":  # A
-                continue
+        asked = b".".join(labels)
+        if asked.lower() != target_name.lower():
+            return
+        if qtype != b"\x00\x01":  # A
+            return
 
-            try:
-                ip = self.ip_getter()
-                ip_bytes = _inet_aton(ip)
-            except Exception:
-                continue
+        try:
+            ip = self.ip_getter()
+            ip_bytes = _inet_aton(ip)
+        except Exception:
+            return
 
-            tid = data[0:2]
-            flags = b"\x84\x00"  # response, authoritative
-            qdcount = b"\x00\x01"
-            ancount = b"\x00\x01"
-            nscount = b"\x00\x00"
-            arcount = b"\x00\x00"
+        tid = data[0:2]
+        flags = b"\x84\x00"  # response, authoritative
+        qdcount = b"\x00\x01"
+        ancount = b"\x00\x01"
+        nscount = b"\x00\x00"
+        arcount = b"\x00\x00"
 
-            ans = b"\xc0\x0c"  # pointer to name
-            ans += b"\x00\x01"  # type A
-            ans += b"\x00\x01"  # class IN
-            ans += b"\x00\x00\x00\x1e"  # TTL 30s
-            ans += b"\x00\x04"  # RDLENGTH
-            ans += ip_bytes
+        ans = b"\xc0\x0c"  # pointer to name
+        ans += b"\x00\x01"  # type A
+        ans += b"\x00\x01"  # class IN
+        ans += b"\x00\x00\x00\x1e"  # TTL 30s
+        ans += b"\x00\x04"  # RDLENGTH
+        ans += ip_bytes
 
-            resp = b"".join(
-                [
-                    tid,
-                    flags,
-                    qdcount,
-                    ancount,
-                    nscount,
-                    arcount,
-                    data[12: idx + 4],
-                    ans,
-                ]
-            )
-            try:
-                self._sock.sendto(resp, (MDNS_MCAST_GRP, MDNS_PORT))
-            except Exception:
-                pass
+        resp = b"".join(
+            [
+                tid,
+                flags,
+                qdcount,
+                ancount,
+                nscount,
+                arcount,
+                data[12: idx + 4],
+                ans,
+            ]
+        )
+        try:
+            self._sock.sendto(resp, (MDNS_MCAST_GRP, MDNS_PORT))
+        except Exception:
+            pass

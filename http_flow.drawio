@@ -57,7 +57,7 @@
           <mxGeometry x="640" y="420" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="h_status" value="看連線狀態 + 電量" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="h_status" value="看 STA/IP/RSSI/AP&#xa;+ 電源電量" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="640" y="500" width="200" height="50" as="geometry"/>
         </mxCell>
 
@@ -69,7 +69,7 @@
           <mxGeometry x="920" y="420" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="h_pstart" value="開始輪詢&#xa;(/poller/start + force enable)" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="h_pstart" value="開始輪詢&#xa;同步 REG21/REG22" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="920" y="490" width="200" height="50" as="geometry"/>
         </mxCell>
 
@@ -77,15 +77,15 @@
           <mxGeometry x="920" y="570" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="h_pstatus" value="看輪詢狀態&#xa;(next_due/last_elapsed/last_error)" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="h_pstatus" value="看輪詢狀態&#xa;(next_due/elapsed/TX/RX)" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="920" y="650" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="h_cfg" value="GET/POST /cfg&#xa;POST /ap/enable" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="h_cfg" value="GET/POST /cfg&#xa;poller 同步 REG21/22" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="1220" y="460" width="200" height="50" as="geometry"/>
         </mxCell>
 
-        <mxCell id="h_reset" value="/gateway/configure(REG64)&#xa;/system/save(REG60) /system/reset(REG61)" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="h_reset" value="/gateway/configure: REG0-16+21/22+64&#xa;/system/save/reset: REG60/61" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
           <mxGeometry x="1220" y="550" width="200" height="50" as="geometry"/>
         </mxCell>
 

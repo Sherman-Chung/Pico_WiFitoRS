@@ -76,6 +76,16 @@ def _ensure_captive_dns():
         print("Captive DNS start failed:", e)
 
 
+def poll_captive_dns():
+    """主迴圈輪詢 Captive DNS，避免 DNS 背景 thread 佔用 core1。"""
+    if _captive_dns is None:
+        return
+    try:
+        _captive_dns.poll()
+    except Exception:
+        pass
+
+
 # =============== 可見 AP 掃描 ===============
 # 說明：
 # 掃描並回傳可見 AP，依 RSSI 由強到弱排序。
