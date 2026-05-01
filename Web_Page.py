@@ -20,7 +20,6 @@ from wifi_Scan_Connect import (
 from config_store import get_config, update_config
 from Pico_UPS import read_battery, power_source_text
 import register_store
-import log_buffer
 
 HTTP_PORT = 80
 HTTP_IO_TIMEOUT_S = 1.5
@@ -354,11 +353,11 @@ WEB_PAGE = """<!DOCTYPE html>
       </div>
       <div class="row" style="margin-top:10px;">
         <div>
-          <label>TCP 轉送模式（REG3）</label>
+          <label>TCP 透傳模式（REG3）</label>
           <select id="tcp-rs485-mode" class="gw-field">
-            <option value="disabled">disabled（TCP→Register Map）</option>
-            <option value="ch0">ch0（TCP→RS485 CH0）</option>
-            <option value="ch1">ch1（TCP→RS485 CH1）</option>
+            <option value="disabled">disabled</option>
+            <option value="ch0">ch0</option>
+            <option value="ch1">ch1</option>
           </select>
         </div>
         <div></div>
@@ -573,12 +572,6 @@ WEB_PAGE = """<!DOCTYPE html>
       <div id="hex-info" class="note"></div>
     </div>
 
-    <!-- 系統回應 Log -->
-    <div class="card span-2 log-card">
-      <h2>回應 Log</h2>
-      <div id="log" class="log"></div>
-    </div>
-
     <!-- 輪詢表格（循環送出） -->
     <div class="card span-2">
       <h2>輪詢表格</h2>
@@ -625,6 +618,12 @@ WEB_PAGE = """<!DOCTYPE html>
         <!-- 新增輪詢列 -->
         <button class="ghost" onclick="addRow()">+ 新增</button>
       </div>
+    </div>
+
+    <!-- 系統回應 Log -->
+    <div class="card span-2 log-card">
+      <h2>回應 Log</h2>
+      <div id="log" class="log"></div>
     </div>
 
     <!-- System -->
@@ -674,39 +673,7 @@ WEB_PAGE = """<!DOCTYPE html>
   }
 
   function clearLog() {
-    fetch('/log/clear', { method: 'POST' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok) {
-          document.getElementById('log').textContent = '';
-        } else {
-          console.error('Failed to clear logs:', data.error);
-        }
-      })
-      .catch(err => {
-        console.error('Error clearing logs:', err);
-      });
-  }
-
-  function pollLogs() {
-    var log = document.getElementById('log');
-    var atBottom = log.scrollHeight - log.clientHeight - log.scrollTop < 4;
-    var prevScroll = log.scrollTop;
-    fetch('/log')
-      .then(r => r.text())
-      .then(text => {
-        if (log.textContent !== text) {
-          log.textContent = text;
-          if (atBottom) {
-            log.scrollTop = log.scrollHeight;
-          } else {
-            log.scrollTop = prevScroll;
-          }
-        }
-      })
-      .catch(err => {
-        // 忽略 fetch 錯誤
-      });
+    document.getElementById('log').textContent = '';
   }
 
   function hexToBytes(raw) {
@@ -784,7 +751,6 @@ WEB_PAGE = """<!DOCTYPE html>
     refreshScan();
     pollStatus();
     setInterval(pollStatus, 1000);
-    setInterval(pollLogs, 1000);
     var btn = document.getElementById('btn-save-config');
     if (btn) {
       btn.addEventListener('click', function(ev) {
@@ -1350,7 +1316,6 @@ def poll_http_server():
             method, path, _ = first_line.split(" ", 2)
             if not (
                 (method == "GET" and path == "/poller/status")
-                or (method == "GET" and path == "/log")
                 or (method == "POST" and path == "/poller/start")
                 or (method == "POST" and path == "/poller/stop")
             ):
@@ -1670,7 +1635,6 @@ def poll_http_server():
             print("HTTP cmd:", repr(cmd_str))
             handler = _cmd_handler or default_handler
             result = handler(cmd_str)
-            log_buffer.append_log("CMD RESP: %s" % result.strip())
             body_bytes = (result + "\n").encode("utf-8")
             resp = (
                 "HTTP/1.1 200 OK\r\n"
@@ -1681,27 +1645,6 @@ def poll_http_server():
             )
             send_all(resp.encode())
             send_all(body_bytes)
-            return
-
-        # ======= 日誌 API: GET /log =======
-        if method == "GET" and path == "/log":
-            logs = log_buffer.get_logs_as_string()
-            body_bytes = logs.encode("utf-8")
-            resp = (
-                "HTTP/1.1 200 OK\r\n"
-                "Content-Type: text/plain; charset=UTF-8\r\n"
-                f"Content-Length: {len(body_bytes)}\r\n"
-                "Connection: close\r\n"
-                "\r\n"
-            )
-            send_all(resp.encode())
-            send_all(body_bytes)
-            return
-
-        # ======= 日誌清空 API: POST /log/clear =======
-        if method == "POST" and path == "/log/clear":
-            log_buffer.clear_logs()
-            send_json({"ok": True})
             return
 
         # ======= 瀏覽器自動請求的圖示，回空白避免噪音 =======

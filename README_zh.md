@@ -15,11 +15,12 @@
    - STA 成功 + `REG20=0` -> 不啟 AP。
    - STA 失敗 + `REG20=1` -> 啟 AP。
    - STA 失敗 + `REG20=0` -> 強制啟 AP，並回寫 `REG20=1`。
-4. 啟動網路服務：HTTP(80) + Modbus TCP(502) + CMD TCP(12345) + mDNS（若 5353 未被占用）。
-5. 等待網路穩定後執行開機檢查：UPS/INA219 + 已啟用 RS485 通道。
-6. 啟動時先同步一次 `REG21`，並註冊 `REG21` 寫入事件（後續由 Web/Modbus 寫入即時啟停 Poller）。
-7. Core0 主迴圈每 20ms：`poll_cmd_server -> poll_http_server -> poll_modbus_tcp_server -> 更新狀態寄存器`。
-8. 主迴圈每 100ms 檢查控制命令（`REG60/61/62/64`）。
+4. 等待網路穩定（STA 已連線或 AP 已啟用）。
+5. 啟動網路服務：HTTP(80) + Modbus TCP(502) + CMD TCP(12345) + mDNS（若 5353 未被占用）。
+6. 執行開機檢查：UPS/INA219 + 已啟用 RS485 通道。
+7. 啟動時先同步一次 `REG21`，並註冊 `REG21` 寫入事件（後續由 Web/Modbus 寫入即時啟停 Poller）。
+8. Core0 主迴圈每 20ms：`poll_cmd_server -> poll_http_server -> poll_modbus_tcp_server`，狀態寄存器約每 500ms 更新一次。
+9. 主迴圈每 100ms 檢查控制命令（`REG60/61/62/64`）。
 
 ## Hold Register 關鍵控制位
 - `REG20`：AP Enable（0=off, 1=on）
@@ -41,7 +42,7 @@
 - 指定通道未啟用時回 `0x0B`；鎖失敗回 `0x06`；下游回覆異常/逾時回 `0x0B`。
 
 ## 設定套用與保存
-- Gateway UART 參數由 `POST /gateway/configure` 寫入配置區後，觸發 `REG64` 套用。
+- Gateway UART 參數由 `POST /gateway/configure` 寫入配置區後，先同步目前 Poller 的 `REG21/REG22`，再觸發 `REG64` 套用。
 - 大多數 Web 設定先更新 RAM（`update_config(..., persist=False)`）。
 - 只有按 System 的「存入 Flash（REG60）」才會持久化。
 
@@ -53,11 +54,11 @@
 - `POST /ap/enable`（對應 `REG20`）
 - `GET /cfg`
 - `POST /cfg`（UART `ch0/ch1` 欄位不接受直接更新，需走 `REG64`）
-- `POST /gateway/configure`（寫配置區 + 觸發 `REG64`）
+- `POST /gateway/configure`（寫 `REG0-16`、同步 Poller `REG21/REG22`、觸發 `REG64`）
 - `POST /system/save`（觸發 `REG60`）
 - `POST /system/reset`（觸發 `REG61`）
 - `GET /poller/config`
-- `POST /poller/start`（同步寫 `REG21=1`）
+- `POST /poller/start`（同步寫 `REG21=1` 與目前 `REG22`）
 - `POST /poller/stop`（同步寫 `REG21=0`）
 - `GET /poller/status`
 - `POST /cmd`
@@ -68,6 +69,7 @@
 - timeout 統一使用 `modbus.response_timeout_ms`。
 - 每次 `tick()` 只處理一列，完成後 `next_due = 完成時間 + interval`。
 - 回填區域主要為 100-355（依 row index 對應）。
+- `/poller/status` 會回傳最近一次 `last_comm`，Web UI 以兩行顯示 `RS485 CHx TX ...` 與 `RS485 CHx RX ...`。
 
 ## 預設設定重點
 - AP：`PicoSetup` / `pico1234` / `enabled=true`

@@ -37,7 +37,9 @@
   - [x] Gateway 設定走 `POST /gateway/configure` + `REG64`
   - [x] System 區塊 `REG60/REG61`
   - [x] AP Enable 對應 `REG20`，顯示讀 `REG56`
-  - [x] Poller 套用為 RAM，落盤需 `REG60`
+  - [x] Poller 套用為 RAM，並同步 `REG21/REG22`；落盤需 `REG60`
+  - [x] Wi-Fi 狀態分行顯示 STA/IP/RSSI/AP/Power
+  - [x] Poller RS485 TX/RX 分行顯示
 
 ---
 
@@ -64,6 +66,7 @@
 - [x] `REG64` 會把寄存器配置套用到執行中設定 + UART
 - [x] `REG60` 才寫入 Flash（重開機保留）
 - [x] `POST /cfg` 不允許直接改 `modbus.ch0/ch1`（需走 `REG64`）
+- [x] `POST /gateway/configure` 觸發 `REG64` 前會同步目前 Poller `REG21/REG22`
 
 ---
 
@@ -73,7 +76,7 @@
 - [ ] 開機時顯示 `Memory initialized from config`
 - [ ] STA 有保存時會嘗試連線
 - [ ] STA 失敗 + REG20=0 會強制啟 AP 並修正 REG20=1
-- [ ] 服務啟動後進入系統檢查
+- [ ] 等待網路穩定、服務啟動後進入系統檢查
 
 ### 4.2 Modbus 路由
 - [ ] `Unit ID=tcp_slave_id` 可 FC03/04 讀本地
@@ -89,6 +92,7 @@
 
 ### 4.4 Poller
 - [ ] `POST /poller/start` 後 `poller.status.enabled=true`
+- [ ] `POST /poller/start` 後 `REG22` 與 `poller.interval_ms` 一致
 - [ ] 輪詢回填可在 map 區讀取
 - [ ] 通道忙碌時 Return 顯示 `BUSY`
 

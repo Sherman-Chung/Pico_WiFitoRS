@@ -20,6 +20,7 @@ from wifi_Scan_Connect import (
     wlan,
     connect_to_ap,
     read_status,
+    poll_captive_dns,
 )
 from mdns_service import MDNSResponder
 from Pico_UPS import read_battery, last_battery_error
@@ -29,6 +30,7 @@ from poller import tick as poller_tick, set_enabled as poller_set_enabled
 import register_store
 
 _poller_thread_started = False
+_poller_thread_stop_requested = False
 _last_cmd_check_ms = 0
 _cmd_check_interval_ms = 100
 _last_status_update_ms = 0
@@ -40,25 +42,34 @@ except Exception:
 
 
 def _poller_worker_loop():
-    """Core1 專用：持續執行 poller.tick()。"""
-    while True:
+    """Core1 專用：持續執行 poller.tick()，需要時可由 REG21 寫入要求退出。"""
+    global _poller_thread_started, _poller_thread_stop_requested
+    while not _poller_thread_stop_requested:
         try:
             poller_tick()
         except Exception as e:
             print("poller worker error:", e)
         # 低延遲輪詢，同時避免空轉吃滿 CPU
         time.sleep_ms(5)
+    _poller_thread_started = False
+    _poller_thread_stop_requested = False
+    print("Poller worker stopped")
 
 
 def start_poller_worker():
     """啟動 Core1 輪詢工作；若不可用回傳 False。"""
-    global _poller_thread_started
+    global _poller_thread_started, _poller_thread_stop_requested
     if _poller_thread_started:
-        return True
+        if _poller_thread_stop_requested:
+            if not stop_poller_worker():
+                return False
+        else:
+            return True
     if _thread is None:
         print("Poller worker unavailable (_thread missing), fallback single-core")
         return False
     try:
+        _poller_thread_stop_requested = False
         _thread.start_new_thread(_poller_worker_loop, ())
         _poller_thread_started = True
         print("Poller worker started on core1")
@@ -66,6 +77,21 @@ def start_poller_worker():
     except Exception as e:
         print("Poller worker start failed:", e)
         return False
+
+
+def stop_poller_worker(wait_ms: int = 1500) -> bool:
+    """
+    要求本程式建立的 Core1 poller worker 退出。
+    MicroPython 無法安全強殺未知/舊執行緒；若 Core1 是 REPL 前次執行殘留，需重啟裝置。
+    """
+    global _poller_thread_started, _poller_thread_stop_requested
+    if not _poller_thread_started:
+        return True
+    _poller_thread_stop_requested = True
+    deadline = time.ticks_add(time.ticks_ms(), wait_ms)
+    while _poller_thread_started and time.ticks_diff(deadline, time.ticks_ms()) > 0:
+        time.sleep_ms(5)
+    return not _poller_thread_started
 
 
 # =============== 網路服務啟動 ===============
@@ -380,8 +406,13 @@ def main():
         if source not in watched_reg21_sources:
             return
         reg21_enabled = bool(int(raw_value) & 0xFFFF)
-        if reg21_enabled == poller_enabled:
-            return
+        if source != "boot_sync":
+            if stop_poller_worker():
+                if poller_on_core1:
+                    print("Poller worker closed by REG21 write")
+                poller_on_core1 = False
+            else:
+                print("Poller worker close requested but core1 is still busy")
         poller_enabled = reg21_enabled
         poller_set_enabled(reg21_enabled)
         if reg21_enabled:
@@ -391,6 +422,7 @@ def main():
             else:
                 print("Poller enabled by REG21 (core0 fallback)")
         else:
+            poller_on_core1 = False
             print("Poller disabled by REG21")
 
     register_store.set_write_hook(21, on_reg21_written)
@@ -412,6 +444,12 @@ def main():
         poll_cmd_server()
         poll_http_server()
         poll_modbus_tcp_server()
+        poll_captive_dns()
+        if mdns is not None:
+            try:
+                mdns.poll()
+            except Exception:
+                pass
 
         # 週期更新系統狀態至 Hold Register (50-56)
         now_ms = time.ticks_ms()

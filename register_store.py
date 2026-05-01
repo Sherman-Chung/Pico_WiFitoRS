@@ -10,7 +10,6 @@ import hold_register_map as hrm
 
 REG_COUNT = 512
 _regs = [0] * REG_COUNT
-_regs[65] = 1  # CMD_COMM_LOG 默認開啟，保留現有通訊日誌行為
 _write_hooks = {}
 
 

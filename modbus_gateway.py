@@ -14,24 +14,13 @@ from config_store import get_config
 from rs485_lock import acquire as lock_acquire, release as lock_release
 from register_store import get_regs, set_reg
 import hold_register_map as hrm
-import log_buffer
 
-server_sock = None # TCP server socket，啟動後保持不變
-TCP_LOG = True # 是否印出 TCP 收發資料的 LOG（包含完整 MBAP header 與 PDU）；設為 False 可關閉此 LOG
-RS485_LOG = True # 是否印出 RS485 收發資料的 LOG（包含轉送的 RTU/ASCII frame）；設為 False 可關閉此 LOG
-COMM_LOG_REG = 65 # 控制是否記錄通訊相關日誌
-TCP_IDLE_TIMEOUT_MS = None # TCP 連線閒置逾時（毫秒），超過此時間未收到資料即自動斷線；設為 None 可關閉此機制
-TCP_FAIR_YIELD_MS = 1 # 在高頻請求下主動讓出 CPU，避免其他工作（含 poller thread）飢餓；設為 0 可關閉此機制
-TCP_RECV_CHUNK = 512 # 每次 recv 最多讀這麼多 bytes，避免一次讀太大導致記憶體壓力；也可調整以適應不同封包大小需求
-TCP_POLL_BUDGET_MS = 1 # 每次 poll_modbus_tcp_server 最多花這麼多時間解析封包，避免 CPU 飢餓
-
-
-def _comm_logging_enabled():
-    """根據 CMD_COMM_LOG (REG65) 動態決定是否記錄通訊日誌。"""
-    try:
-        return bool(get_regs(COMM_LOG_REG, 1, decode=False)[0])
-    except Exception:
-        return True
+server_sock = None
+LOG_TCP = True
+TCP_IDLE_TIMEOUT_MS = None
+TCP_FAIR_YIELD_MS = 1
+TCP_RECV_CHUNK = 512
+TCP_POLL_BUDGET_MS = 1
 
 _active_client = None
 _active_addr = None
@@ -194,7 +183,7 @@ def _read_rtu_response(ch: int, timeout_ms: int, baudrate: int) -> bytes:
     char_ms = int(1000 * 11 / max(1, baudrate))
     idle_ms = max(4, int(char_ms * 4))
     while time.ticks_diff(time.ticks_ms(), t0) < timeout_ms:
-        chunk = rs485.recv(ch, 256, log=RS485_LOG)
+        chunk = rs485.recv(ch, 256, log=False)
         if chunk:
             buf.extend(chunk)
             last_rx = time.ticks_ms()
@@ -213,7 +202,7 @@ def _read_ascii_response(ch: int, timeout_ms: int) -> bytes:
     buf = bytearray()
     t0 = time.ticks_ms()
     while time.ticks_diff(time.ticks_ms(), t0) < timeout_ms:
-        chunk = rs485.recv(ch, 256, log=RS485_LOG)
+        chunk = rs485.recv(ch, 256, log=False)
         if chunk:
             buf.extend(chunk)
             if b"\n" in chunk:
@@ -221,17 +210,6 @@ def _read_ascii_response(ch: int, timeout_ms: int) -> bytes:
         else:
             time.sleep_ms(5)
     return bytes(buf)
-
-
-# =============== RS485 RX Log ===============
-# 說明：
-# TCP 透傳讀取時會關閉 chunk log，這裡在完整回覆收完後集中輸出一次。
-def _log_rs485_rx(ch: int, data: bytes):
-    """輸出 TCP 透傳收到的 RS485 回覆。"""
-    if data:
-        print("RS485 CH%d RX:" % ch, _hex_line(data))
-    else:
-        print("RS485 CH%d RX: <empty>" % ch)
 
 
 # =============== Exception PDU 產生 ===============
@@ -259,7 +237,6 @@ def start_modbus_tcp_server(port: int = 502):
     s.settimeout(0.0)
     server_sock = s
     print("Modbus TCP server listening on", addr)
-    log_buffer.append_log("Modbus TCP server listening on " + str(addr))
 
 
 # =============== 定長資料讀取 ===============
@@ -293,8 +270,8 @@ def _close_active_client():
             _active_client.close()
     except Exception:
         pass
-    if TCP_LOG and _active_addr is not None and _comm_logging_enabled():
-        log_buffer.append_log("TCP DISCONNECT: " + str(_active_addr))
+    if LOG_TCP and _active_addr is not None:
+        print("TCP DISCONNECT:", _active_addr)
     _active_client = None
     _active_addr = None
     _active_buf = b""
@@ -379,7 +356,7 @@ def _handle_local_register_request(cl, tid: bytes, unit_id: int, pdu: bytes):
             if ok:
                 success_count += 1
             else:
-                if TCP_LOG:
+                if LOG_TCP:
                     print(f"Register write error at {idx}: {err_msg}")
                 error = True
 
@@ -407,7 +384,7 @@ def _handle_local_register_request(cl, tid: bytes, unit_id: int, pdu: bytes):
         should_encode = 0 <= reg_addr < 23  # 配置區 0-22
         ok, err_msg = set_reg(reg_addr, raw_val, encode=should_encode, source="modbus_tcp_local")
         if not ok:
-            if TCP_LOG and _comm_logging_enabled() and _comm_logging_enabled():
+            if LOG_TCP:
                 print(f"Register write error at {reg_addr}: {err_msg}")
             resp_pdu = _make_exception_pdu(pdu, 0x03)
             _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
@@ -494,16 +471,14 @@ def _handle_mb_tcp_request(cl, tid: bytes, unit_id: int, pdu: bytes):
         if mode == "ascii":
             frame = _build_ascii_frame(unit_id, pdu)
             rs485.flush_input(ch)
-            rs485.send(ch, frame, log=RS485_LOG and _comm_logging_enabled())
+            rs485.send(ch, frame)
             raw = _read_ascii_response(ch, timeout_ms)
-            _log_rs485_rx(ch, raw)
             resp_unit, resp_pdu = _parse_ascii_frame(raw)
         else:
             frame = _build_rtu_frame(unit_id, pdu)
             rs485.flush_input(ch)
-            rs485.send(ch, frame, log=RS485_LOG and _comm_logging_enabled())
+            rs485.send(ch, frame)
             raw = _read_rtu_response(ch, timeout_ms, int(ch_cfg.get("baudrate") or 9600))
-            _log_rs485_rx(ch, raw)
             resp_unit, resp_pdu = _parse_rtu_frame(raw)
 
         if resp_unit is None or resp_pdu is None:
@@ -538,8 +513,8 @@ def poll_modbus_tcp_server():
         _active_addr = addr
         _active_buf = b""
         _active_last_rx = time.ticks_ms()
-        if TCP_LOG and _comm_logging_enabled():
-            log_buffer.append_log("TCP CONNECT: " + str(addr))
+        if LOG_TCP:
+            print("TCP CONNECT:", addr)
 
     # 連線閒置逾時（可選）
     if TCP_IDLE_TIMEOUT_MS is not None and _active_last_rx:
@@ -597,8 +572,8 @@ def poll_modbus_tcp_server():
             packet = _active_buf[:total_len]
             pdu = _active_buf[7:total_len]
             _active_buf = _active_buf[total_len:]
-            if TCP_LOG and _comm_logging_enabled():
-                log_buffer.append_log("TCP RX: " + _hex_line(packet))
+            if LOG_TCP:
+                print("TCP RX:", _hex_line(packet))
             _handle_mb_tcp_request(_active_client, tid, unit_id, pdu)
     except Exception as e:
         print("Modbus TCP error:", e)
@@ -613,8 +588,8 @@ def _send_mb_tcp_response(sock, tid: bytes, unit_id: int, pdu: bytes):
     length = len(pdu) + 1
     mbap = tid + b"\x00\x00" + bytes([(length >> 8) & 0xFF, length & 0xFF, unit_id & 0xFF])
     payload = mbap + pdu
-    if TCP_LOG and _comm_logging_enabled():
-        log_buffer.append_log("TCP TX: " + _hex_line(payload))
+    if LOG_TCP:
+        print("TCP TX:", _hex_line(payload))
     sock.send(payload)
 
 

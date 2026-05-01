@@ -109,12 +109,6 @@ REGISTER_DEFS = {
         "desc": "最後命令狀態",
     },
     64: {"name": "CMD_APPLY_CONFIG", "writeonly": True, "desc": "寫入 1 套用配置（特別用於 UART 參數）"},
-    65: {
-        "name": "CMD_COMM_LOG",
-        "default": 1,
-        "enum": {0: "disabled", 1: "enabled"},
-        "desc": "是否記錄通訊日誌（TCP/RS485）",
-    },
 }
 
 

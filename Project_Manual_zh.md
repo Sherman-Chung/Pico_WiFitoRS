@@ -41,8 +41,8 @@
    - STA 成功 + REG20=0：不啟 AP。
    - STA 失敗 + REG20=1：啟 AP。
    - STA 失敗 + REG20=0：強制啟 AP，並回寫 REG20=1。
-5. 啟動 HTTP/Modbus/CMD 服務與 mDNS（5353 被占用時會記錄訊息並略過）。
-6. `wait_for_network_stable()`。
+5. `wait_for_network_stable()` 等待 STA 已連線或 AP 已啟用。
+6. 啟動 HTTP/Modbus/CMD 服務與 mDNS（5353 被占用時會記錄訊息並略過）。
 7. `run_system_checks()`：UPS + 已啟用 RS485；失敗進入 `fail_halt()`。
 8. 啟動時同步一次 REG21，並註冊 REG21 寫入事件；後續由 Web/Modbus 改 REG21 即時啟停 poller。
 9. 進入主迴圈。
@@ -88,7 +88,7 @@
 - 下游回覆無效/逾時：回 `0x0B`
 
 ### 5.3 UART 套用
-- Web Gateway 設定會先寫入配置寄存器（0-16），再觸發 `REG64`。
+- Web Gateway 設定會先寫入配置寄存器（0-16），同步目前 Poller 的 `REG21/REG22`，再觸發 `REG64`。
 - `main.py` 收到 `apply` 命令後即時 `rs485.init(...)` 套用 UART。
 
 ---
@@ -103,7 +103,7 @@
 ### 6.2 配置
 - `GET /cfg`
 - `POST /cfg`（RAM 套用，`modbus.ch0/ch1` 會被忽略，需走 REG64）
-- `POST /gateway/configure`（寫 0-16 + 觸發 REG64）
+- `POST /gateway/configure`（寫 0-16 + 同步 Poller 21/22 + 觸發 REG64）
 
 ### 6.3 System
 - `POST /system/save`（觸發 REG60）
@@ -111,7 +111,7 @@
 
 ### 6.4 Poller
 - `GET /poller/config`
-- `POST /poller/start`（寫 `REG21=1`）
+- `POST /poller/start`（寫 `REG21=1`，並同步目前 `REG22`）
 - `POST /poller/stop`（寫 `REG21=0`）
 - `GET /poller/status`
 
@@ -125,6 +125,7 @@
 - `interval_ms >= 50`。
 - 每次 `tick()` 只處理一列。
 - timeout 統一來自 `modbus.response_timeout_ms`。
+- `/poller/status` 回傳最近一次 RS485 `last_comm`；Web UI 以分行顯示 TX/RX 封包。
 - 結果回填策略：
   - FC03/FC04：解析 byte count，連續寫入寄存器。
   - FC05/FC06：寫單一寄存器。

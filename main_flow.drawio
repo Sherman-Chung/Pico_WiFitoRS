@@ -1,149 +1,367 @@
-<mxfile host="app.diagrams.net" modified="2026-03-04T00:00:00.000Z" agent="Codex" version="20.8.20" type="device">
+<?xml version="1.0" encoding="utf-8"?>
+<mxfile host="app.diagrams.net" modified="2026-04-28T16:07:30.000Z" agent="Codex" version="20.8.20" type="device">
   <diagram id="main-flow" name="Main Flow">
-    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="900" math="0" shadow="0">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1850" math="0" shadow="0">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
-
-        <mxCell id="start" value="開機" style="fontSize=14;fontFamily=Times New Roman;ellipse;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
-          <mxGeometry x="60" y="40" width="200" height="50" as="geometry"/>
+        <mxCell id="sec_boot" value="一、開機與設定初始化" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fontStyle=1;fontSize=16;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="360" height="44" as="geometry"/>
         </mxCell>
-
-        <mxCell id="cfg" value="讀設定 + 初始化&#xa;Hold Register 512" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="40" y="110" width="200" height="50" as="geometry"/>
+        <mxCell id="sec_net" value="二、STA / AP 決策與網路服務" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fontStyle=1;fontSize=16;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="430" y="20" width="420" height="44" as="geometry"/>
         </mxCell>
-
-        <mxCell id="readap" value="檢查 STA 設定" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="20" y="190" width="200" height="50" as="geometry"/>
+        <mxCell id="sec_check" value="三、系統檢查與 REG21 啟動同步" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fontStyle=1;fontSize=16;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="900" y="20" width="460" height="44" as="geometry"/>
         </mxCell>
-
-        <mxCell id="autoap" value="有保存 STA 嗎?" style="fontSize=14;fontFamily=Times New Roman;rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
-          <mxGeometry x="70" y="280" width="240" height="135" as="geometry"/>
+        <mxCell id="sec_loop" value="四、Core0 主迴圈" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fontStyle=1;fontSize=16;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="940" width="300" height="44" as="geometry"/>
         </mxCell>
-
-        <mxCell id="startap" value="嘗試連接 STA&#xa;timeout 6s" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="260" y="270" width="200" height="50" as="geometry"/>
+        <mxCell id="sec_cmd" value="五、控制命令 REG60/61/62/64" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fontStyle=1;fontSize=16;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="920" y="940" width="460" height="44" as="geometry"/>
         </mxCell>
-
-        <mxCell id="sta" value="讀 REG20 決策 AP&#xa;STA失敗且 REG20=0 時強制開 AP" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="20" y="380" width="200" height="50" as="geometry"/>
+        <mxCell id="sec_reg21" value="六、HTTP / Modbus 寫 REG21 時的 Poller 處理" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fontStyle=1;fontSize=16;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1450" y="940" width="620" height="44" as="geometry"/>
         </mxCell>
-
-        <mxCell id="checks" value="啟動服務&#xa;HTTP + CMD + Modbus + mDNS" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="40" y="470" width="200" height="50" as="geometry"/>
+        <mxCell id="start" value="開機 Boot&lt;br&gt;執行 main()" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;ellipse;aspect=fixed;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="90" y="100" width="220" height="58" as="geometry"/>
         </mxCell>
-
-        <mxCell id="err" value="wait network +&#xa;system checks 通過?" style="fontSize=14;fontFamily=Times New Roman;rhombus;whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
-          <mxGeometry x="70" y="560" width="240" height="135" as="geometry"/>
+        <mxCell id="cfg" value="讀取 config_store&lt;br&gt;get_config()" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="90" y="190" width="220" height="56" as="geometry"/>
         </mxCell>
-
-        <mxCell id="halt" value="fail_halt&#xa;LED 閃爍停機" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
-          <mxGeometry x="260" y="560" width="200" height="50" as="geometry"/>
+        <mxCell id="reg_init" value="初始化 Hold Register 512&lt;br&gt;register_store.initialize_from_config(cfg)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="70" y="280" width="280" height="66" as="geometry"/>
         </mxCell>
-
-        <mxCell id="ensureap" value="註冊 REG21 寫入事件&#xa;+ 開機同步一次 REG21" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="20" y="670" width="200" height="50" as="geometry"/>
+        <mxCell id="sta_cfg" value="讀取 AP / STA 設定&lt;br&gt;ap.ssid/password、sta.ssid/password" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="70" y="390" width="300" height="66" as="geometry"/>
         </mxCell>
-
-        <mxCell id="ensuresvc" value="進入 Core0 主迴圈" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="280" y="670" width="200" height="50" as="geometry"/>
+        <mxCell id="has_sta" value="是否有保存 STA SSID?" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rhombus;aspect=fixed;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="95" y="510" width="230" height="110" as="geometry"/>
         </mxCell>
-
-        <mxCell id="loop" value="主迴圈&#xa;持續重複" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
-          <mxGeometry x="60" y="780" width="200" height="50" as="geometry"/>
+        <mxCell id="try_sta" value="嘗試連接 STA&lt;br&gt;connect_to_ap(..., timeout_ms=6000)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="430" y="500" width="320" height="66" as="geometry"/>
         </mxCell>
-
-        <mxCell id="pollcmd" value="poll_cmd_server" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="300" y="780" width="200" height="50" as="geometry"/>
+        <mxCell id="skip_sta" value="沒有 STA 設定&lt;br&gt;略過連線" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="90" y="680" width="220" height="56" as="geometry"/>
         </mxCell>
-
-        <mxCell id="pollhttp" value="poll_http_server" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="490" y="780" width="200" height="50" as="geometry"/>
+        <mxCell id="sta_ok" value="STA 連線成功?" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rhombus;aspect=fixed;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="465" y="650" width="230" height="110" as="geometry"/>
         </mxCell>
-
-        <mxCell id="pollmodbus" value="poll_modbus_tcp_server&#xa;(事件式非阻塞)" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="700" y="780" width="200" height="50" as="geometry"/>
+        <mxCell id="read_reg20" value="讀 REG20&lt;br&gt;AP Enable 控制位" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="450" y="800" width="240" height="56" as="geometry"/>
         </mxCell>
-
-        <mxCell id="poller" value="更新狀態 + 檢查 REG60/61/62/64&#xa;必要時 Core0 poller + sleep 20ms" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="930" y="780" width="200" height="50" as="geometry"/>
+        <mxCell id="ap_decision" value="REG20 = 1 ?" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rhombus;aspect=fixed;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="455" y="900" width="220" height="100" as="geometry"/>
         </mxCell>
-
-        <mxCell id="core1poll" value="REG21 事件為 1 時&#xa;Core1 背景執行緒 poller_tick + sleep 5ms" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
-          <mxGeometry x="840" y="680" width="200" height="50" as="geometry"/>
+        <mxCell id="ap_start_sta" value="啟動 AP&lt;br&gt;STA connected / unavailable 且 REG20=1" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="430" y="1060" width="330" height="66" as="geometry"/>
         </mxCell>
-
-        <mxCell id="reg21evt" value="若 HTTP / Modbus 本地寫 REG21&#xa;觸發 on_reg21_written 即時啟停" style="fontSize=14;fontFamily=Times New Roman;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
-          <mxGeometry x="560" y="680" width="240" height="50" as="geometry"/>
+        <mxCell id="ap_disabled" value="STA 成功且 REG20=0&lt;br&gt;不啟動 AP" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="780" y="900" width="260" height="62" as="geometry"/>
         </mxCell>
-
-        <!-- Edges -->
-        <mxCell id="e1" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="start" target="cfg">
+        <mxCell id="ap_force" value="STA 不可用且 REG20=0&lt;br&gt;強制啟 AP，並回寫 REG20=1" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="780" y="1060" width="330" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="wait_net" value="等待網路穩定&lt;br&gt;STA connected 或 AP active" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="900" y="1210" width="300" height="62" as="geometry"/>
+        </mxCell>
+        <mxCell id="svc" value="啟動網路服務&lt;br&gt;Modbus TCP / CMD TCP / HTTP / mDNS" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="900" y="1320" width="360" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="checks" value="進入主迴圈前系統檢查&lt;br&gt;UPS/INA219 + 已啟用 RS485 初始化" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="920" y="100" width="390" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="check_ok" value="檢查通過?" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rhombus;aspect=fixed;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="995" y="220" width="220" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="halt" value="fail_halt(reason)&lt;br&gt;LED 持續閃爍，停止服務流程" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="240" width="300" height="66" as="geometry"/>
+        </mxCell>
+        <mxCell id="hook" value="註冊 REG21 寫入 hook&lt;br&gt;register_store.set_write_hook(21, on_reg21_written)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="920" y="390" width="430" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="boot_sync" value="開機同步一次 REG21&lt;br&gt;on_reg21_written(21, _read_reg(21), &quot;boot_sync&quot;)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="920" y="510" width="430" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="reg21_initial" value="REG21 初值 = 1 ?" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rhombus;aspect=fixed;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1005" y="640" width="230" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="start_worker" value="嘗試啟動 Core1 Poller worker&lt;br&gt;start_poller_worker()" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="900" y="800" width="360" height="66" as="geometry"/>
+        </mxCell>
+        <mxCell id="worker_ok" value="Core1 worker 啟動成功?" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rhombus;aspect=fixed;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="970" y="900" width="250" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="core1_loop" value="Core1 worker 執行&lt;br&gt;poller_tick() + sleep 5ms&lt;br&gt;可被 REG21 寫入要求退出" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="800" width="340" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="fallback_flag" value="Core1 不可用 / 啟動失敗&lt;br&gt;由 Core0 主迴圈 fallback 執行 poller_tick()" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="980" width="360" height="78" as="geometry"/>
+        </mxCell>
+        <mxCell id="no_worker" value="REG21=0&lt;br&gt;開機不啟動 Poller worker" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="900" y="1060" width="310" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="enter_loop" value="進入 Core0 主迴圈" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="1160" width="260" height="58" as="geometry"/>
+        </mxCell>
+        <mxCell id="ide_note" value="開發注意：IDE/REPL STOP 不保證清掉舊 Core1 thread&lt;br&gt;若看到 core1 in use，請重啟 Pico 清空舊 thread" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fontSize=12;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="112" width="560" height="58" as="geometry"/>
+        </mxCell>
+        <mxCell id="loop_start" value="Core0 while True&lt;br&gt;每輪最後 sleep 20ms" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1020" width="260" height="66" as="geometry"/>
+        </mxCell>
+        <mxCell id="poll_cmd" value="poll_cmd_server()&lt;br&gt;處理維運 TCP 指令" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1140" width="280" height="62" as="geometry"/>
+        </mxCell>
+        <mxCell id="poll_http" value="poll_http_server()&lt;br&gt;處理 Web UI / HTTP API" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1250" width="300" height="62" as="geometry"/>
+        </mxCell>
+        <mxCell id="poll_modbus" value="poll_modbus_tcp_server()&lt;br&gt;事件式非阻塞 Modbus TCP" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1360" width="320" height="62" as="geometry"/>
+        </mxCell>
+        <mxCell id="status_update" value="每 500ms 更新狀態寄存器&lt;br&gt;REG50-56：run_time / temp / battery / STA / AP" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1470" width="420" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="cmd_check" value="每 100ms 檢查控制命令&lt;br&gt;register_store.check_and_clear_command()" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1590" width="380" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="core0_fallback" value="若 poller_enabled 且 core1 未啟動&lt;br&gt;Core0 執行 poller_tick()" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="520" y="1470" width="350" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="sleep20" value="sleep 20ms&lt;br&gt;避免 CPU 忙等" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="520" y="1590" width="240" height="58" as="geometry"/>
+        </mxCell>
+        <mxCell id="cmd_switch" value="cmd 是哪一種?" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rhombus;aspect=fixed;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1010" y="1040" width="230" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="cmd_save" value="REG60 Save&lt;br&gt;從 Hold Register 匯出 config&lt;br&gt;update_config(..., persist=True)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="920" y="1220" width="360" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="cmd_apply" value="REG64 Apply&lt;br&gt;從 Hold Register 套用到 RAM&lt;br&gt;並立即 rs485.init(...)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="1220" width="360" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="cmd_reset" value="REG61 Reset&lt;br&gt;reset_config()&lt;br&gt;延遲後 machine.reset()" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="920" y="1400" width="330" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="cmd_reboot" value="REG62 Reboot&lt;br&gt;設定狀態 success&lt;br&gt;延遲後 machine.reset()" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="1400" width="330" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="cmd_status" value="REG63 命令狀態&lt;br&gt;busy=1 / success=2 / error=3" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="1600" width="360" height="66" as="geometry"/>
+        </mxCell>
+        <mxCell id="reg21_src" value="REG21 寫入來源&lt;br&gt;HTTP web_poller/web_cfg 或 Modbus TCP local" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="1020" width="420" height="66" as="geometry"/>
+        </mxCell>
+        <mxCell id="reg21_val" value="讀取 raw_value&lt;br&gt;reg21_enabled = bool(REG21)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="1130" width="360" height="58" as="geometry"/>
+        </mxCell>
+        <mxCell id="stop_worker" value="非 boot_sync 時&lt;br&gt;先要求既有 Core1 worker 關閉&lt;br&gt;stop_poller_worker(wait_ms=1500)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="1230" width="440" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="set_enabled" value="poller_set_enabled(reg21_enabled)&lt;br&gt;同步 poller 啟停狀態" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="1360" width="360" height="62" as="geometry"/>
+        </mxCell>
+        <mxCell id="reg21_on" value="REG21 = 1 ?" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rhombus;aspect=fixed;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1570" y="1470" width="220" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="restart_core1" value="重新啟動 Core1 worker&lt;br&gt;成功：Poller enabled by REG21 (core1)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1450" y="1620" width="390" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="disabled" value="REG21 = 0&lt;br&gt;poller_on_core1=False&lt;br&gt;Poller disabled by REG21" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1870" y="1620" width="280" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="fallback_core0" value="若 start 失敗&lt;br&gt;Poller enabled by REG21 (core0 fallback)" style="fontSize=14;fontFamily=Times New Roman;whiteSpace=wrap;html=1;rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1450" y="1740" width="400" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="start" target="cfg">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e2" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="cfg" target="readap">
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cfg" target="reg_init">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e3" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="readap" target="autoap">
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="reg_init" target="sta_cfg">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e4" value="是" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="autoap" target="startap">
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="sta_cfg" target="has_sta">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e5" value="否" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="autoap" target="sta">
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="has_sta" target="try_sta" value="是">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e6" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="startap" target="sta">
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="has_sta" target="skip_sta" value="否">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e7" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="sta" target="checks">
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="try_sta" target="sta_ok">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e8" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="checks" target="err">
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="skip_sta" target="read_reg20">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e9" value="No" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="err" target="halt">
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="sta_ok" target="read_reg20" value="是 / 否都繼續">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e10" value="Yes" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="err" target="ensureap">
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="read_reg20" target="ap_decision">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e11" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="ensureap" target="ensuresvc">
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="ap_decision" target="ap_start_sta" value="是">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e12" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="ensuresvc" target="loop">
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="ap_decision" target="ap_disabled" value="否，且 STA 成功">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-
-        <!-- Linear loop chain -->
-        <mxCell id="e13" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="loop" target="pollcmd">
+        <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="ap_decision" target="ap_force" value="否，且 STA 失敗">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e14" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="pollcmd" target="pollhttp">
+        <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="ap_start_sta" target="wait_net">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e15" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="pollhttp" target="pollmodbus">
+        <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="ap_disabled" target="wait_net">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e16" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="pollmodbus" target="poller">
+        <mxCell id="e16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="ap_force" target="wait_net">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e17" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="poller" target="loop">
+        <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="wait_net" target="svc">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e18" value="開機同步 REG21=1" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="ensureap" target="core1poll">
+        <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="svc" target="checks">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e19" value="若寫 REG21" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="pollhttp" target="reg21evt">
+        <mxCell id="e19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="checks" target="check_ok">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e20" value="若寫 REG21" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="pollmodbus" target="reg21evt">
+        <mxCell id="e20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="check_ok" target="halt" value="否">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e21" value="1 時啟 Core1 / 0 時停用" style="fontSize=14;fontFamily=Times New Roman;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="reg21evt" target="core1poll">
+        <mxCell id="e21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="check_ok" target="hook" value="是">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-
+        <mxCell id="e22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="hook" target="boot_sync">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="boot_sync" target="reg21_initial">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="reg21_initial" target="start_worker" value="是">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="reg21_initial" target="no_worker" value="否">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="start_worker" target="worker_ok">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="worker_ok" target="core1_loop" value="是">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="worker_ok" target="fallback_flag" value="否">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="core1_loop" target="enter_loop">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="fallback_flag" target="enter_loop">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e31" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="no_worker" target="enter_loop">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e32" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="enter_loop" target="loop_start">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e33" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="loop_start" target="poll_cmd">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="poll_cmd" target="poll_http">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e35" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="poll_http" target="poll_modbus">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e36" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="poll_modbus" target="status_update">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e37" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="status_update" target="cmd_check">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e38" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cmd_check" target="core0_fallback">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e39" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="core0_fallback" target="sleep20">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e40" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="sleep20" target="loop_start">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e41" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;dashed=1;" edge="1" parent="1" source="cmd_check" target="cmd_switch" value="有命令">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e42" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cmd_switch" target="cmd_save" value="save">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e43" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cmd_switch" target="cmd_apply" value="apply">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e44" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cmd_switch" target="cmd_reset" value="reset">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e45" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cmd_switch" target="cmd_reboot" value="reboot">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e46" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cmd_save" target="cmd_status">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e47" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cmd_apply" target="cmd_status">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e48" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cmd_reset" target="cmd_status">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e49" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="cmd_reboot" target="cmd_status">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e50" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;dashed=1;" edge="1" parent="1" source="cmd_status" target="sleep20">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e51" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;dashed=1;" edge="1" parent="1" source="poll_http" target="reg21_src" value="HTTP 寫 REG21">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e52" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;dashed=1;" edge="1" parent="1" source="poll_modbus" target="reg21_src" value="Modbus TCP 寫 REG21">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e53" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="reg21_src" target="reg21_val">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e54" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="reg21_val" target="stop_worker">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e55" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="stop_worker" target="set_enabled">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e56" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="set_enabled" target="reg21_on">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e57" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="reg21_on" target="restart_core1" value="是">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e58" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="reg21_on" target="disabled" value="否">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e59" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;" edge="1" parent="1" source="restart_core1" target="fallback_core0" value="若失敗">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e60" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;dashed=1;" edge="1" parent="1" source="restart_core1" target="core1_loop" value="若成功">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e61" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;dashed=1;" edge="1" parent="1" source="disabled" target="sleep20">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e62" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;dashed=1;" edge="1" parent="1" source="fallback_core0" target="core0_fallback">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e63" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;fontFamily=Times New Roman;endArrow=block;dashed=1;" edge="1" parent="1" source="ide_note" target="core1_loop" value="說明">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>

@@ -11,13 +11,7 @@ try:
 except ImportError:  # MicroPython may not include typing
     Union = object
 
-import time
 from machine import UART, Pin
-
-try:
-    import log_buffer
-except ImportError:
-    log_buffer = None
 
 UART_PINS = {
     0: {"tx": Pin(0), "rx": Pin(1)},
@@ -25,16 +19,6 @@ UART_PINS = {
 }
 
 _uart_cache = {}
-_rx_log_state = {
-    0: {"buf": bytearray(), "last": None},
-    1: {"buf": bytearray(), "last": None},
-}
-_RX_LOG_FLUSH_MS = 8
-
-# =============== RS485 LOG 控制 ===============
-# 說明：
-# 全局變數控制 RS485 TX/RX 是否印出 LOG。設為 False 可關閉所有 RS485 LOG。
-LOG_RS485 = False
 
 
 # =============== RS485 通道初始化 ===============
@@ -84,61 +68,31 @@ def _get_uart(ch: int):
 # =============== RS485 資料送出 ===============
 # 說明：
 # 送出 bytes/str 資料到指定通道，並輸出 TX HEX 供除錯。
-def send(ch: int, data, log: bool = None):
+def send(ch: int, data):
     """送出資料（bytes 或 str）。回傳送出位元組數。"""
     uart = _get_uart(ch)
     if isinstance(data, str):
         data = data.encode()
-    if log is None:
-        log = LOG_RS485
-    if data and log:
+    if data:
         hex_txt = " ".join("%02X" % b for b in data)
-        msg = "RS485 CH%d TX: %s" % (ch, hex_txt)
-        print(msg)
-        if log_buffer:
-            log_buffer.append_log(msg)
+        print("RS485 CH%d TX:" % ch, hex_txt)
     return uart.write(data)
 
 
 # =============== RS485 資料接收 ===============
 # 說明：
 # 非阻塞讀取指定通道可用資料；若無資料回空 bytes。
-def _flush_rx_log(ch: int):
-    state = _rx_log_state.get(ch)
-    if not state:
-        return
-    if not state["buf"]:
-        return
-    hex_txt = " ".join("%02X" % b for b in state["buf"])
-    msg = "RS485 CH%d RX: %s" % (ch, hex_txt)
-    print(msg)
-    if log_buffer:
-        log_buffer.append_log(msg)
-    state["buf"] = bytearray()
-    state["last"] = None
-
-
-def recv(ch: int, max_bytes: int = 256, log: bool = None):
+def recv(ch: int, max_bytes: int = 256, log: bool = True):
     """非阻塞讀取通道資料，回傳 bytes（可能為空）。"""
     uart = _get_uart(ch)
     n = uart.any()
     if not n:
-        state = _rx_log_state.get(ch)
-        if state and state["buf"] and state["last"] is not None:
-            if time.ticks_diff(time.ticks_ms(), state["last"]) > _RX_LOG_FLUSH_MS:
-                _flush_rx_log(ch)
         return b""
     n = min(n, max_bytes)
     data = uart.read(n) or b""
-    if log is None:
-        log = LOG_RS485
-    state = _rx_log_state.get(ch)
-    if data and log and state is not None:
-        now = time.ticks_ms()
-        if state["buf"] and state["last"] is not None and time.ticks_diff(now, state["last"]) > _RX_LOG_FLUSH_MS:
-            _flush_rx_log(ch)
-        state["buf"].extend(data)
-        state["last"] = now
+    if data and log:
+        hex_txt = " ".join("%02X" % b for b in data)
+        print("RS485 CH%d RX:" % ch, hex_txt)
     return data
 
 
