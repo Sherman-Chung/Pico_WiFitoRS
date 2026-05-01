@@ -473,12 +473,14 @@ def _handle_mb_tcp_request(cl, tid: bytes, unit_id: int, pdu: bytes):
             rs485.flush_input(ch)
             rs485.send(ch, frame)
             raw = _read_ascii_response(ch, timeout_ms)
+            _log_rs485_rx(ch, raw)
             resp_unit, resp_pdu = _parse_ascii_frame(raw)
         else:
             frame = _build_rtu_frame(unit_id, pdu)
             rs485.flush_input(ch)
             rs485.send(ch, frame)
             raw = _read_rtu_response(ch, timeout_ms, int(ch_cfg.get("baudrate") or 9600))
+            _log_rs485_rx(ch, raw)
             resp_unit, resp_pdu = _parse_rtu_frame(raw)
 
         if resp_unit is None or resp_pdu is None:
@@ -591,6 +593,16 @@ def _send_mb_tcp_response(sock, tid: bytes, unit_id: int, pdu: bytes):
     if LOG_TCP:
         print("TCP TX:", _hex_line(payload))
     sock.send(payload)
+
+
+# =============== RS485 RX 顯示格式化 ===============
+# 說明：
+# TCP 透傳讀取時會關閉分段 recv log，這裡改用完整回覆集中輸出一次。
+def _log_rs485_rx(ch: int, data: bytes):
+    if data:
+        print("RS485 CH%d RX:" % ch, _hex_line(data))
+    else:
+        print("RS485 CH%d RX: <empty>" % ch)
 
 
 # =============== HEX 顯示格式化 ===============
