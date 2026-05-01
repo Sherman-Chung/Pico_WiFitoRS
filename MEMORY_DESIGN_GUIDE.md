@@ -77,7 +77,7 @@
 | 55 | SYS_STA_CONNECTED | 0/1 |
 | 56 | SYS_AP_ACTIVE | 0/1 |
 
-更新由 `main.update_hold_register_status()` 負責，現行主迴圈約每 500ms 更新一次。
+更新由 `main.update_hold_register_status()` 負責，現行採節流快取（約 1 秒採樣）。
 
 ---
 
@@ -143,15 +143,13 @@ Modbus TCP 本地寄存器路徑：
 
 - `POST /gateway/configure`：
   - 先寫 `REG0-16`
-  - 同步目前 Poller 設定到 `REG21/REG22`，避免 `REG64` 匯出時覆蓋輪詢間隔
   - 再觸發 `REG64`
 - `POST /cfg`：
   - 更新 RAM 配置
   - `modbus.ch0/ch1` 會被後端移除（UART 需走 `REG64`）
-  - 若包含 `poller`，同步 `REG21/REG22`
 - `POST /poller/start` / `POST /poller/stop`：
   - 同步更新 `poller.enabled`
-  - start 同步寫入 `REG21/REG22`；stop 同步寫入 `REG21`（觸發 Poller 即時啟停）
+  - 同步寫入 `REG21`（觸發 Poller 即時啟停）
 - `POST /system/save`：觸發 `REG60`
 - `POST /system/reset`：觸發 `REG61`
 

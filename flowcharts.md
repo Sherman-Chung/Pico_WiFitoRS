@@ -21,10 +21,10 @@ flowchart TD
   M8 -->|No 且 STA成功| M10["不啟 AP"]
   M8 -->|No 且 STA失敗| M11["強制啟 AP + 回寫 REG20=1"]
 
-  M9 --> M12["等待網路穩定"]
+  M9 --> M12["啟動服務 HTTP + ModbusTCP + CMDTCP + mDNS"]
   M10 --> M12
   M11 --> M12
-  M12 --> M13["啟動服務 HTTP + ModbusTCP + CMDTCP + mDNS"]
+  M12 --> M13["等待網路穩定"]
   M13 --> M14["系統檢查 UPS + RS485"]
   M14 --> M15{檢查通過}
   M15 -->|No| M16["fail_halt LED 閃爍停機"]
@@ -38,7 +38,7 @@ flowchart TD
   M21 --> M22["poll_cmd_server"]
   M22 --> M23["poll_http_server"]
   M23 --> M24["poll_modbus_tcp_server"]
-  M24 --> M25["約每500ms更新狀態寄存器 50-56"]
+  M24 --> M25["更新狀態寄存器 50-56"]
   M25 --> M26["檢查命令 REG60/61/62/64（每100ms）"]
   M26 --> M27{poller_enabled 且 core1未啟動}
   M27 -->|Yes| M28["Core0 執行 poller_tick"]
@@ -47,14 +47,13 @@ flowchart TD
   M29 --> M30
   M30 --> M21
 
-  M23 -.寫 REG21 時.-> M31["事件回呼 on_reg21_written&#xa;先要求 Core1 worker 關閉再啟停"]
+  M23 -.寫 REG21 時.-> M31["事件回呼 on_reg21_written&#xa;立即啟停 poller"]
   M24 -.寫 REG21 時.-> M31
   M31 --> M25
 
-  M19 --> M32["Core1 worker: poller_tick + sleep 5ms&#xa;可被 REG21 寫入要求退出"]
+  M19 --> M32["Core1: poller_tick"]
   M32 --> M33["sleep 5ms"]
   M33 --> M32
-  M34["注意：IDE/REPL STOP 不保證清掉舊 Core1 thread&#xa;開發時若 core1 in use，請重啟 Pico"] -.-> M32
 
   %% ========================
   %% HTTP Server
@@ -66,18 +65,18 @@ flowchart TD
 
   H5 -->|GET /| H6["回 Web UI"]
   H5 -->|GET /wifi/scan| H7["掃描 AP JSON"]
-  H5 -->|GET /wifi/status| H8["回 STA/IP/RSSI/AP REG20/REG56/電源"]
+  H5 -->|GET /wifi/status| H8["回 STA AP REG20 REG56 電源"]
   H5 -->|POST /wifi/connect| H9["連線 STA"]
   H5 -->|POST /ap/enable| H10["寫 REG20 並啟停 AP"]
 
   H5 -->|GET /cfg| H11["回完整設定"]
-  H5 -->|POST /cfg| H12["更新 RAM 設定（poller 同步 REG21/22）"]
-  H5 -->|POST /gateway/configure| H13["寫 REG0-16 + 同步 REG21/22 + 觸發 REG64"]
+  H5 -->|POST /cfg| H12["更新 RAM 設定（poller.enabled 同步 REG21）"]
+  H5 -->|POST /gateway/configure| H13["寫 REG0-16 + 觸發 REG64"]
   H5 -->|POST /system/save| H14["觸發 REG60"]
   H5 -->|POST /system/reset| H15["觸發 REG61"]
 
   H5 -->|GET /poller/config| H17["回 Poller 設定"]
-  H5 -->|POST /poller/start| H18["啟用 Poller + 寫 REG21=1/REG22"]
+  H5 -->|POST /poller/start| H18["啟用 Poller + 寫 REG21=1"]
   H5 -->|POST /poller/stop| H19["停用 Poller + 寫 REG21=0"]
   H5 -->|GET /poller/status| H20["回 Poller 狀態"]
   H5 -->|POST /cmd| H21["委派 Server_CMD.handle_cmd"]
