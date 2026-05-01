@@ -14,10 +14,11 @@ from config_store import get_config
 from rs485_lock import acquire as lock_acquire, release as lock_release
 from register_store import get_regs, set_reg
 import hold_register_map as hrm
+import log_buffer
 
 server_sock = None # TCP server socket，啟動後保持不變
-TCP_LOG = False # 是否印出 TCP 收發資料的 LOG（包含完整 MBAP header 與 PDU）；設為 False 可關閉此 LOG
-RS485_LOG = False # 是否印出 RS485 收發資料的 LOG（包含轉送的 RTU/ASCII frame）；設為 False 可關閉此 LOG
+TCP_LOG = True # 是否印出 TCP 收發資料的 LOG（包含完整 MBAP header 與 PDU）；設為 False 可關閉此 LOG
+RS485_LOG = True # 是否印出 RS485 收發資料的 LOG（包含轉送的 RTU/ASCII frame）；設為 False 可關閉此 LOG
 TCP_IDLE_TIMEOUT_MS = None # TCP 連線閒置逾時（毫秒），超過此時間未收到資料即自動斷線；設為 None 可關閉此機制
 TCP_FAIR_YIELD_MS = 1 # 在高頻請求下主動讓出 CPU，避免其他工作（含 poller thread）飢餓；設為 0 可關閉此機制
 TCP_RECV_CHUNK = 512 # 每次 recv 最多讀這麼多 bytes，避免一次讀太大導致記憶體壓力；也可調整以適應不同封包大小需求
@@ -238,6 +239,7 @@ def start_modbus_tcp_server(port: int = 502):
     s.settimeout(0.0)
     server_sock = s
     print("Modbus TCP server listening on", addr)
+    log_buffer.append_log("Modbus TCP server listening on " + str(addr))
 
 
 # =============== 定長資料讀取 ===============
@@ -272,7 +274,7 @@ def _close_active_client():
     except Exception:
         pass
     if TCP_LOG and _active_addr is not None:
-        print("TCP DISCONNECT:", _active_addr)
+        log_buffer.append_log("TCP DISCONNECT: " + str(_active_addr))
     _active_client = None
     _active_addr = None
     _active_buf = b""
@@ -515,7 +517,7 @@ def poll_modbus_tcp_server():
         _active_buf = b""
         _active_last_rx = time.ticks_ms()
         if TCP_LOG:
-            print("TCP CONNECT:", addr)
+            log_buffer.append_log("TCP CONNECT: " + str(addr))
 
     # 連線閒置逾時（可選）
     if TCP_IDLE_TIMEOUT_MS is not None and _active_last_rx:
@@ -574,7 +576,7 @@ def poll_modbus_tcp_server():
             pdu = _active_buf[7:total_len]
             _active_buf = _active_buf[total_len:]
             if TCP_LOG:
-                print("TCP RX:", _hex_line(packet))
+                log_buffer.append_log("TCP RX: " + _hex_line(packet))
             _handle_mb_tcp_request(_active_client, tid, unit_id, pdu)
     except Exception as e:
         print("Modbus TCP error:", e)
@@ -590,7 +592,7 @@ def _send_mb_tcp_response(sock, tid: bytes, unit_id: int, pdu: bytes):
     mbap = tid + b"\x00\x00" + bytes([(length >> 8) & 0xFF, length & 0xFF, unit_id & 0xFF])
     payload = mbap + pdu
     if TCP_LOG:
-        print("TCP TX:", _hex_line(payload))
+        log_buffer.append_log("TCP TX: " + _hex_line(payload))
     sock.send(payload)
 
 

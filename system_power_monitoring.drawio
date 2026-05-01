@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="GitHub Copilot" version="21.0.0">
+  <diagram name="系統狀態與電源監控整合" id="system-power-monitoring">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- 標題 -->
+        <mxCell id="title" value="系統狀態與電源監控整合架構" style="rounded=1;whiteSpace=wrap;html=1;fontSize=20;fontStyle=1;fontFamily=Times New Roman;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="400" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- 資料來源區塊 -->
+        <mxCell id="src_title" value="資料來源 (詳細流程)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="20" y="80" width="180" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- CPU 溫度來源 - 詳細流程 -->
+        <mxCell id="cpu_title" value="1. CPU 溫度" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="20" y="120" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cpu_src1" value="machine.ADC(4)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="150" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cpu_src2" value="raw = adc.read()" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="180" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cpu_src3" value="voltage = raw * 3.3/65535" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="210" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cpu_src4" value="temp = 27 - (V-0.706)/0.001721" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="240" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- 電池電壓來源 - 詳細流程 -->
+        <mxCell id="batt_title" value="2. 電池狀態" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="140" y="120" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="batt_src1" value="read_battery()" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="140" y="150" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="batt_src2" value="INA219.getBusVoltage_V()" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="140" y="180" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="batt_src3" value="INA219.getCurrent_mA()" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="140" y="210" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="batt_src4" value="percent = (V-3.0)/1.2*100" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="140" y="240" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- WiFi 狀態來源 - 詳細流程 -->
+        <mxCell id="wifi_title" value="3. WiFi 狀態" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="260" y="120" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wifi_src1" value="wlan = network.WLAN()" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="260" y="150" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wifi_src2" value="wlan.isconnected()" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="260" y="180" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wifi_src3" value="回傳: True/False" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="260" y="210" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wifi_src4" value="REG55 = 1/0" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="260" y="240" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- AP 狀態來源 - 詳細流程 -->
+        <mxCell id="ap_title" value="4. AP 熱點" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="380" y="120" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ap_src1" value="read_status()" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="380" y="150" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ap_src2" value="wifi_Scan_Connect.py" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="380" y="180" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ap_src3" value="檢查 ap_active 狀態" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="380" y="210" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ap_src4" value="REG56 = 1/0" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="380" y="240" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- 執行時間來源 - 詳細流程 -->
+        <mxCell id="time_title" value="5. 執行時間" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="500" y="120" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="time_src1" value="boot_ticks = time.ticks_ms()" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="500" y="150" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="time_src2" value="now = time.ticks_ms()" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="500" y="180" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="time_src3" value="diff = ticks_diff(now, boot)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="500" y="210" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="time_src4" value="REG50 = diff / 1000 (秒)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="500" y="240" width="100" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- 更新流程區塊 -->
+        <mxCell id="flow_title" value="更新流程" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="240" y="80" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- update_hold_register_status 函數 -->
+        <mxCell id="update_func" value="update_hold_register_status()&#xa;main.py:230" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontFamily=Times New Roman;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="240" y="120" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線：CPU 最後一步 -> update_hold_register_status -->
+        <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1" source="cpu_src4" target="update_func">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線：Battery 最後一步 -> update_hold_register_status -->
+        <mxCell id="edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1" source="batt_src4" target="update_func">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線：WiFi 最後一步 -> update_hold_register_status -->
+        <mxCell id="edge3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1" source="wifi_src4" target="update_func">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線：AP 最後一步 -> update_hold_register_status -->
+        <mxCell id="edge4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1" source="ap_src4" target="update_func">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線：Time 最後一步 -> update_hold_register_status -->
+        <mxCell id="edge5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1" source="time_src4" target="update_func">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- register_store.update_status -->
+        <mxCell id="reg_store" value="register_store.update_status()&#xa;狀態寫入記憶體" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontFamily=Times New Roman;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="240" y="200" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線 -->
+        <mxCell id="edge6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1" source="update_func" target="reg_store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 主迴圈調用 -->
+        <mxCell id="main_loop" value="主迴圈調用&#xa;每 500ms 執行一次" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="250" y="280" width="140" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線 -->
+        <mxCell id="edge7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;dashed=1;" edge="1" parent="1" source="main_loop" target="update_func">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Register 映射區塊 -->
+        <mxCell id="reg_title" value="Hold Register 映射 (50-56)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="460" y="80" width="200" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Register 50 -->
+        <mxCell id="reg50" value="REG 50&#xa;SYS_RUN_TIME&#xa;系統執行時間 (秒)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ddebf7;strokeColor=#7ea6e0;" vertex="1" parent="1">
+          <mxGeometry x="460" y="120" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Register 51 -->
+        <mxCell id="reg51" value="REG 51&#xa;SYS_CPU_TEMP&#xa;CPU 溫度 (°C)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ddebf7;strokeColor=#7ea6e0;" vertex="1" parent="1">
+          <mxGeometry x="460" y="180" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Register 52 -->
+        <mxCell id="reg52" value="REG 52&#xa;SYS_BATT_V&#xa;電池電壓 (0.01V)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ddebf7;strokeColor=#7ea6e0;" vertex="1" parent="1">
+          <mxGeometry x="460" y="240" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Register 53 -->
+        <mxCell id="reg53" value="REG 53&#xa;SYS_BATT_I&#xa;電池電流 (0.1mA)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ddebf7;strokeColor=#7ea6e0;" vertex="1" parent="1">
+          <mxGeometry x="460" y="300" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Register 54 -->
+        <mxCell id="reg54" value="REG 54&#xa;SYS_BATT_P&#xa;電池電量 (%)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ddebf7;strokeColor=#7ea6e0;" vertex="1" parent="1">
+          <mxGeometry x="460" y="360" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Register 55 -->
+        <mxCell id="reg55" value="REG 55&#xa;SYS_STA_CONNECTED&#xa;STA 連接狀態 (0/1)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ddebf7;strokeColor=#7ea6e0;" vertex="1" parent="1">
+          <mxGeometry x="620" y="120" width="160" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Register 56 -->
+        <mxCell id="reg56" value="REG 56&#xa;SYS_AP_ACTIVE&#xa;AP 啟用狀態 (0/1)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ddebf7;strokeColor=#7ea6e0;" vertex="1" parent="1">
+          <mxGeometry x="620" y="180" width="160" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線：reg_store -> Registers -->
+        <mxCell id="edge8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1" source="reg_store" target="reg50">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Modbus TCP 讀取區塊 -->
+        <mxCell id="tcp_title" value="Modbus TCP 讀取" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="840" y="80" width="140" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- modbus_gateway 讀取 -->
+        <mxCell id="tcp_read" value="modbus_gateway.py&#xa;_handle_local_register_request()&#xa;FC03/FC04 讀取" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="840" y="120" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線：Registers -> TCP Read -->
+        <mxCell id="edge9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1" source="reg52" target="tcp_read">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 外部客戶端 -->
+        <mxCell id="client" value="Modbus TCP 客戶端&#xa;(SCADA/HMI/上位機)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;fontFamily=Times New Roman;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="120" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- 連接線：TCP Read -> Client -->
+        <mxCell id="edge10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;" edge="1" parent="1" source="tcp_read" target="client">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 數據流向說明 -->
+        <mxCell id="legend_title" value="數據流向說明" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="440" width="120" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 圖例1 -->
+        <mxCell id="legend1" value="資料來源" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="480" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 圖例2 -->
+        <mxCell id="legend2" value="處理函數" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="160" y="480" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 圖例3 -->
+        <mxCell id="legend3" value="Hold Register" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ddebf7;strokeColor=#7ea6e0;" vertex="1" parent="1">
+          <mxGeometry x="280" y="480" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 圖例4 -->
+        <mxCell id="legend4" value="TCP 閘道器" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="400" y="480" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 圖例5 -->
+        <mxCell id="legend5" value="外部客戶端" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="520" y="480" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 更新週期說明 -->
+        <mxCell id="cycle_title" value="更新週期" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="540" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 週期說明 -->
+        <mxCell id="cycle_info" value="• 主迴圈每 500ms 呼叫一次 update_hold_register_status()&#xa;• 透過 register_store.update_status() 更新記憶體&#xa;• Modbus TCP 客戶端可即時讀取 REG 50-56" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="580" width="300" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- 電壓轉換說明 -->
+        <mxCell id="conv_title" value="數值轉換公式" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="380" y="540" width="140" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 轉換公式 -->
+        <mxCell id="conv_info" value="• 電壓: REG * 0.01V&#xa;  例: 370 → 3.70V&#xa;• 電流: REG * 0.1mA&#xa;  例: 100 → 10.0mA&#xa;• 電量: REG * 1%&#xa;  例: 75 → 75%" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="380" y="580" width="200" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- 硬體架構說明 -->
+        <mxCell id="hw_title" value="硬體架構" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fontFamily=Times New Roman;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="620" y="540" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- 硬體資訊 -->
+        <mxCell id="hw_info" value="Pico 2 W&#xa;├─ ADC(4): CPU 溫度&#xa;├─ I2C(0): INA219 電池監控&#xa;└─ WiFi: STA/AP 狀態" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontFamily=Times New Roman;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="620" y="580" width="180" height="80" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

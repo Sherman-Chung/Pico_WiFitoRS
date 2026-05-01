@@ -10,6 +10,7 @@ import socket
 import time
 from machine import Pin
 
+import log_buffer
 from wifi_Scan_Connect import wlan, reset_wifi, restart_config_ap
 import Pico_RS485 as rs485
 from rs485_lock import acquire as lock_acquire, release as lock_release
@@ -62,6 +63,8 @@ def handle_cmd(cmd: str) -> str:
     cmd = cmd.strip()
     if not cmd:
         return "ERR EMPTY"
+
+    log_buffer.append_log("CMD: %s" % cmd)
 
     parts = cmd.split()
     name = parts[0].upper()
