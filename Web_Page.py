@@ -573,6 +573,12 @@ WEB_PAGE = """<!DOCTYPE html>
       <div id="hex-info" class="note"></div>
     </div>
 
+    <!-- 系統回應 Log -->
+    <div class="card span-2 log-card">
+      <h2>回應 Log</h2>
+      <div id="log" class="log"></div>
+    </div>
+
     <!-- 輪詢表格（循環送出） -->
     <div class="card span-2">
       <h2>輪詢表格</h2>
@@ -619,12 +625,6 @@ WEB_PAGE = """<!DOCTYPE html>
         <!-- 新增輪詢列 -->
         <button class="ghost" onclick="addRow()">+ 新增</button>
       </div>
-    </div>
-
-    <!-- 系統回應 Log -->
-    <div class="card span-2 log-card">
-      <h2>回應 Log</h2>
-      <div id="log" class="log"></div>
     </div>
 
     <!-- System -->
@@ -674,7 +674,18 @@ WEB_PAGE = """<!DOCTYPE html>
   }
 
   function clearLog() {
-    document.getElementById('log').textContent = '';
+    fetch('/log/clear', { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          document.getElementById('log').textContent = '';
+        } else {
+          console.error('Failed to clear logs:', data.error);
+        }
+      })
+      .catch(err => {
+        console.error('Error clearing logs:', err);
+      });
   }
 
   function pollLogs() {
