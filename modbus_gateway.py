@@ -223,6 +223,17 @@ def _read_ascii_response(ch: int, timeout_ms: int) -> bytes:
     return bytes(buf)
 
 
+# =============== RS485 RX Log ===============
+# 說明：
+# TCP 透傳讀取時會關閉 chunk log，這裡在完整回覆收完後集中輸出一次。
+def _log_rs485_rx(ch: int, data: bytes):
+    """輸出 TCP 透傳收到的 RS485 回覆。"""
+    if data:
+        print("RS485 CH%d RX:" % ch, _hex_line(data))
+    else:
+        print("RS485 CH%d RX: <empty>" % ch)
+
+
 # =============== Exception PDU 產生 ===============
 # 說明：
 # 依請求功能碼產生標準 Modbus Exception PDU。
@@ -485,12 +496,14 @@ def _handle_mb_tcp_request(cl, tid: bytes, unit_id: int, pdu: bytes):
             rs485.flush_input(ch)
             rs485.send(ch, frame, log=RS485_LOG and _comm_logging_enabled())
             raw = _read_ascii_response(ch, timeout_ms)
+            _log_rs485_rx(ch, raw)
             resp_unit, resp_pdu = _parse_ascii_frame(raw)
         else:
             frame = _build_rtu_frame(unit_id, pdu)
             rs485.flush_input(ch)
             rs485.send(ch, frame, log=RS485_LOG and _comm_logging_enabled())
             raw = _read_rtu_response(ch, timeout_ms, int(ch_cfg.get("baudrate") or 9600))
+            _log_rs485_rx(ch, raw)
             resp_unit, resp_pdu = _parse_rtu_frame(raw)
 
         if resp_unit is None or resp_pdu is None:
