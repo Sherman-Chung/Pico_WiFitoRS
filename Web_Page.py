@@ -1192,7 +1192,7 @@ WEB_PAGE = """<!DOCTYPE html>
       .then(r => r.json())
       .then(d => {
         if (d.ok) {
-          msg.textContent = '連線成功，IP: ' + (d.ip || '(取得中)') + (d.saved ? '（已套用，未寫入 Flash）' : '');
+          msg.textContent = '連線成功，IP: ' + (d.ip || '(取得中)') + (d.saved ? '（已儲存，重開機會自動連線）' : '');
         } else {
           msg.textContent = '連線失敗：' + (d.error || 'unknown');
         }
@@ -1469,7 +1469,15 @@ def poll_http_server():
             if ok:
                 saved = False
                 if save_sta:
-                    ok2, err2, _cfg = update_config({"sta": {"ssid": ssid, "password": psk}})
+                    ok2, err2, _cfg = update_config(
+                        {"sta": {"ssid": ssid, "password": psk}},
+                        persist=True,
+                    )
+                    if not ok2:
+                        resp = {"ok": False, "error": err2 or "save failed"}
+                        resp.update(status_payload)
+                        send_json(resp, status="500 Internal Server Error")
+                        return
                     saved = ok2 and not err2
                 resp = {"ok": True, "ip": ip, "saved": saved}
                 resp.update(status_payload)
