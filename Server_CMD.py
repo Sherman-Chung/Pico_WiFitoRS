@@ -179,7 +179,7 @@ def handle_cmd(cmd: str) -> str:
             payload = " ".join(args[2:])
             try:
                 rs485.init(ch)
-                n = rs485.send(ch, payload + "\r\n")
+                n = rs485.send(ch, payload + "\r\n", log=False)
                 return f"OK RS SEND {ch} {n}B"
             except Exception as e:
                 return "ERR RS SEND " + str(e)[:60]
@@ -216,7 +216,7 @@ def handle_cmd(cmd: str) -> str:
                     bits=int(ch_cfg.get("bits") or 8),
                 )
                 rs485.flush_input(ch)
-                n = rs485.send(ch, raw)
+                n = rs485.send(ch, raw, log=False)
                 # 等待 UART 送完再切入接收（估算傳輸時間）
                 tx_time_ms = int((len(raw) * 11 * 1000) / baudrate) + 2
                 time.sleep_ms(tx_time_ms)
@@ -235,7 +235,6 @@ def handle_cmd(cmd: str) -> str:
                         time.sleep_ms(10)
                 if buf:
                     hex_txt = " ".join("%02X" % b for b in buf)
-                    print("RS485 CH%d RX:" % ch, hex_txt)
                     return f"OK RS HEX {ch} {n}B RX {len(buf)}B {hex_txt}"
                 return f"OK RS HEX {ch} {n}B RX 0B"
             except Exception as e:

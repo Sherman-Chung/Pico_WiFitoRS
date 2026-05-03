@@ -14,13 +14,14 @@ from config_store import get_config
 from rs485_lock import acquire as lock_acquire, release as lock_release
 from register_store import get_regs, set_reg
 import hold_register_map as hrm
+from runtime_log import log
 
 server_sock = None
 LOG_TCP = True
 TCP_IDLE_TIMEOUT_MS = None
-TCP_FAIR_YIELD_MS = 1
+TCP_FAIR_YIELD_MS = 0
 TCP_RECV_CHUNK = 512
-TCP_POLL_BUDGET_MS = 1
+TCP_POLL_BUDGET_MS = 5
 
 _active_client = None
 _active_addr = None
@@ -271,7 +272,7 @@ def _close_active_client():
     except Exception:
         pass
     if LOG_TCP and _active_addr is not None:
-        print("TCP DISCONNECT:", _active_addr)
+        log("TCP DISCONNECT:", _active_addr)
     _active_client = None
     _active_addr = None
     _active_buf = b""
@@ -357,7 +358,7 @@ def _handle_local_register_request(cl, tid: bytes, unit_id: int, pdu: bytes):
                 success_count += 1
             else:
                 if LOG_TCP:
-                    print(f"Register write error at {idx}: {err_msg}")
+                    log(f"Register write error at {idx}: {err_msg}")
                 error = True
 
         if error or success_count != count:
@@ -385,7 +386,7 @@ def _handle_local_register_request(cl, tid: bytes, unit_id: int, pdu: bytes):
         ok, err_msg = set_reg(reg_addr, raw_val, encode=should_encode, source="modbus_tcp_local")
         if not ok:
             if LOG_TCP:
-                print(f"Register write error at {reg_addr}: {err_msg}")
+                log(f"Register write error at {reg_addr}: {err_msg}")
             resp_pdu = _make_exception_pdu(pdu, 0x03)
             _send_mb_tcp_response(cl, tid, unit_id, resp_pdu)
             return
@@ -516,7 +517,7 @@ def poll_modbus_tcp_server():
         _active_buf = b""
         _active_last_rx = time.ticks_ms()
         if LOG_TCP:
-            print("TCP CONNECT:", addr)
+            log("TCP CONNECT:", addr)
 
     # 連線閒置逾時（可選）
     if TCP_IDLE_TIMEOUT_MS is not None and _active_last_rx:
@@ -575,10 +576,10 @@ def poll_modbus_tcp_server():
             pdu = _active_buf[7:total_len]
             _active_buf = _active_buf[total_len:]
             if LOG_TCP:
-                print("TCP RX:", _hex_line(packet))
+                log("TCP RX:", _hex_line(packet))
             _handle_mb_tcp_request(_active_client, tid, unit_id, pdu)
     except Exception as e:
-        print("Modbus TCP error:", e)
+        log("Modbus TCP error:", e)
         _close_active_client()
 
 
@@ -591,7 +592,7 @@ def _send_mb_tcp_response(sock, tid: bytes, unit_id: int, pdu: bytes):
     mbap = tid + b"\x00\x00" + bytes([(length >> 8) & 0xFF, length & 0xFF, unit_id & 0xFF])
     payload = mbap + pdu
     if LOG_TCP:
-        print("TCP TX:", _hex_line(payload))
+        log("TCP TX:", _hex_line(payload))
     sock.send(payload)
 
 
@@ -600,9 +601,9 @@ def _send_mb_tcp_response(sock, tid: bytes, unit_id: int, pdu: bytes):
 # TCP 透傳讀取時會關閉分段 recv log，這裡改用完整回覆集中輸出一次。
 def _log_rs485_rx(ch: int, data: bytes):
     if data:
-        print("RS485 CH%d RX:" % ch, _hex_line(data))
+        log("RS485 CH%d RX:" % ch, _hex_line(data))
     else:
-        print("RS485 CH%d RX: <empty>" % ch)
+        log("RS485 CH%d RX: <empty>" % ch)
 
 
 # =============== HEX 顯示格式化 ===============

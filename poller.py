@@ -26,6 +26,7 @@ import Pico_RS485 as rs485
 from config_store import get_config, get_response_timeout_ms
 from rs485_lock import acquire as lock_acquire, release as lock_release
 from register_store import set_reg, set_regs
+from runtime_log import log
 
 # 輪詢狀態
 _last_enabled = None  # 記錄上次 enabled 狀態，狀態切換時重置索引
@@ -389,9 +390,9 @@ def tick():
                 _last_comm["rx_len"] = len(raw)
                 _last_comm["ts"] = time.ticks_ms()
                 if raw:
-                    print("RS485 CH%d RX:" % ch, _format_hex_bytes(raw))
+                    log("RS485 CH%d RX:" % ch, _format_hex_bytes(raw))
                 else:
-                    print("RS485 CH%d RX: <empty>" % ch)
+                    log("RS485 CH%d RX: <empty>" % ch)
 
                 # 回覆解析失敗時，嘗試在 raw 內找可通過 CRC 的 frame
                 if resp_unit is None or resp_pdu is None:

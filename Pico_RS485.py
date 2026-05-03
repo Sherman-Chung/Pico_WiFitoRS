@@ -12,6 +12,7 @@ except ImportError:  # MicroPython may not include typing
     Union = object
 
 from machine import UART, Pin
+from runtime_log import log as runtime_log
 
 UART_PINS = {
     0: {"tx": Pin(0), "rx": Pin(1)},
@@ -68,14 +69,14 @@ def _get_uart(ch: int):
 # =============== RS485 資料送出 ===============
 # 說明：
 # 送出 bytes/str 資料到指定通道，並輸出 TX HEX 供除錯。
-def send(ch: int, data):
+def send(ch: int, data, log: bool = True):
     """送出資料（bytes 或 str）。回傳送出位元組數。"""
     uart = _get_uart(ch)
     if isinstance(data, str):
         data = data.encode()
-    if data:
+    if data and log:
         hex_txt = " ".join("%02X" % b for b in data)
-        print("RS485 CH%d TX:" % ch, hex_txt)
+        runtime_log("RS485 CH%d TX:" % ch, hex_txt)
     return uart.write(data)
 
 
@@ -92,7 +93,7 @@ def recv(ch: int, max_bytes: int = 256, log: bool = True):
     data = uart.read(n) or b""
     if data and log:
         hex_txt = " ".join("%02X" % b for b in data)
-        print("RS485 CH%d RX:" % ch, hex_txt)
+        runtime_log("RS485 CH%d RX:" % ch, hex_txt)
     return data
 
 

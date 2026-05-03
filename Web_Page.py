@@ -20,6 +20,7 @@ from wifi_Scan_Connect import (
 from config_store import get_config, update_config
 from Pico_UPS import read_battery, power_source_text
 import register_store
+import runtime_log
 
 HTTP_PORT = 80
 HTTP_IO_TIMEOUT_S = 1.5
@@ -647,17 +648,64 @@ WEB_PAGE = """<!DOCTYPE html>
     var now = new Date();
     var ts = now.toLocaleTimeString();
     log.textContent += '[' + ts + '] ' + line + '\\n';
+    var lines = log.textContent.split('\\n');
+    if (lines.length > 500) {
+      log.textContent = lines.slice(lines.length - 500).join('\\n');
+    }
     log.scrollTop = log.scrollHeight;
   }
 
-  function sendCmd(cmd) {
-    appendLog('> ' + cmd);
+  var runtimeLogSince = null;
+  var runtimeLogEpoch = 0;
+  var runtimeLogPolling = false;
+  var runtimeLogIntervalMs = 250;
+  var runtimeLogBatchLimit = 12;
 
+  function pollRuntimeLog() {
+    if (runtimeLogPolling) {
+      return Promise.resolve();
+    }
+    runtimeLogPolling = true;
+    var epoch = runtimeLogEpoch;
+    var url = '/logs';
+    if (runtimeLogSince === null) {
+      url += '?cursor=1';
+    } else {
+      url += '?since=' + runtimeLogSince;
+    }
+    url += '&limit=' + runtimeLogBatchLimit;
+    url += (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+    return fetch(url, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (epoch !== runtimeLogEpoch) return;
+        appendRuntimeLogPayload(d);
+      })
+      .catch(() => {})
+      .finally(() => {
+        runtimeLogPolling = false;
+      });
+  }
+
+  function appendRuntimeLogPayload(d) {
+    if (!d) return;
+    var lastSeen = Number(runtimeLogSince || 0);
+    (d.lines || []).forEach(item => {
+      var id = Number(item.id || 0);
+      if (id > lastSeen) {
+        appendLog(item.text || '');
+        lastSeen = id;
+      }
+    });
+    var next = Number(d.next || 0);
+    runtimeLogSince = Math.max(lastSeen, next, Number(runtimeLogSince || 0));
+  }
+
+  function sendCmd(cmd) {
     var xhr = new XMLHttpRequest();
     xhr.onreadystatechange = function() {
       if (xhr.readyState === 4) {
-        var text = xhr.responseText || '';
-        appendLog('< ' + text.trim());
+        pollStatus();
       }
     };
     xhr.open('POST', '/cmd', true);
@@ -674,6 +722,18 @@ WEB_PAGE = """<!DOCTYPE html>
 
   function clearLog() {
     document.getElementById('log').textContent = '';
+    runtimeLogSince = null;
+    runtimeLogEpoch += 1;
+    var epoch = runtimeLogEpoch;
+    fetch('/logs/clear', { method: 'POST', cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (epoch !== runtimeLogEpoch) return;
+        appendRuntimeLogPayload(d);
+      })
+      .catch(() => {
+        if (epoch === runtimeLogEpoch) pollRuntimeLog();
+      });
   }
 
   function hexToBytes(raw) {
@@ -749,8 +809,11 @@ WEB_PAGE = """<!DOCTYPE html>
     loadConfig();
     refreshStatus();
     refreshScan();
-    pollStatus();
-    setInterval(pollStatus, 1000);
+    pollRuntimeLog().then(() => {
+      pollStatus();
+      setInterval(pollStatus, 1000);
+      setInterval(pollRuntimeLog, runtimeLogIntervalMs);
+    });
     var btn = document.getElementById('btn-save-config');
     if (btn) {
       btn.addEventListener('click', function(ev) {
@@ -943,9 +1006,19 @@ WEB_PAGE = """<!DOCTYPE html>
   }
 
   function pollStatus() {
-    fetch('/poller/status')
+    if (runtimeLogSince === null) {
+      pollRuntimeLog().then(() => pollStatus());
+      return;
+    }
+    var epoch = runtimeLogEpoch;
+    var url = '/poller/status';
+    url += (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+    fetch(url, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
+        if (epoch === runtimeLogEpoch) {
+          appendRuntimeLogPayload(d.logs);
+        }
         if (Array.isArray(d.results)) {
           d.results.forEach((ret, i) => {
             var cell = document.querySelector('[data-ret="' + i + '"]');
@@ -1314,10 +1387,15 @@ def poll_http_server():
         try:
             first_line = head.split(b"\r\n", 1)[0].decode()
             method, path, _ = first_line.split(" ", 2)
+            query = ""
+            if "?" in path:
+                path, query = path.split("?", 1)
             if not (
                 (method == "GET" and path == "/poller/status")
                 or (method == "POST" and path == "/poller/start")
                 or (method == "POST" and path == "/poller/stop")
+                or (method == "GET" and path == "/logs")
+                or (method == "POST" and path == "/logs/clear")
             ):
                 print("HTTP request:", method, path)
         except Exception as e:
@@ -1331,6 +1409,9 @@ def poll_http_server():
             )
             send_all(resp.encode())
             return
+
+        if "query" not in locals():
+            query = ""
 
         content_length = 0
         for line in head.split(b"\r\n")[1:]:
@@ -1365,6 +1446,8 @@ def poll_http_server():
             resp = (
                 f"HTTP/1.1 {status}\r\n"
                 "Content-Type: application/json; charset=UTF-8\r\n"
+                "Cache-Control: no-store, no-cache, must-revalidate\r\n"
+                "Pragma: no-cache\r\n"
                 f"Content-Length: {len(body_bytes)}\r\n"
                 "Connection: close\r\n"
                 "\r\n"
@@ -1386,6 +1469,27 @@ def poll_http_server():
             )
             send_all(hdr.encode())
             send_all(body_bytes)
+            return
+
+        # ======= Runtime Log API =======
+        if method == "GET" and path == "/logs":
+            since = 0
+            limit = 12
+            cursor_only = False
+            for part in (query or "").split("&"):
+                if part == "cursor=1":
+                    cursor_only = True
+                elif part.startswith("since="):
+                    since = part.split("=", 1)[1]
+                elif part.startswith("limit="):
+                    limit = part.split("=", 1)[1]
+            if cursor_only:
+                since = None
+            send_json(runtime_log.get_since(since, limit))
+            return
+
+        if method == "POST" and path == "/logs/clear":
+            send_json(runtime_log.clear())
             return
 
         # ======= Wi-Fi API =======
@@ -1556,7 +1660,19 @@ def poll_http_server():
         if method == "GET" and path == "/poller/status":
             from poller import status as poller_status
 
-            send_json(poller_status())
+            st = poller_status()
+            log_since = None
+            log_limit = 12
+            for part in (query or "").split("&"):
+                if part.startswith("log_since="):
+                    log_since = part.split("=", 1)[1]
+                elif part.startswith("since="):
+                    log_since = part.split("=", 1)[1]
+                elif part.startswith("log_limit="):
+                    log_limit = part.split("=", 1)[1]
+            if log_since is not None:
+                st["logs"] = runtime_log.get_since(log_since, log_limit)
+            send_json(st)
             return
 
         # ======= Config API =======
@@ -1641,8 +1757,10 @@ def poll_http_server():
         if method == "POST" and path == "/cmd":
             cmd_str = body.decode("utf-8", "ignore").strip()
             print("HTTP cmd:", repr(cmd_str))
+            runtime_log.log(">", cmd_str)
             handler = _cmd_handler or default_handler
             result = handler(cmd_str)
+            runtime_log.log("<", result)
             body_bytes = (result + "\n").encode("utf-8")
             resp = (
                 "HTTP/1.1 200 OK\r\n"
