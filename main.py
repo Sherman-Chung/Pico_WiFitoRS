@@ -441,6 +441,7 @@ def main():
         # 3) 更新系統狀態暫存器
         # 4) Poller：REG21=1 時執行（優先 Core1，失敗則退回單核心）
 
+        poll_modbus_tcp_server()
         poll_cmd_server()
         poll_http_server()
         poll_modbus_tcp_server()
